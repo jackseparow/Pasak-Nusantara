@@ -8,8 +8,13 @@ let jenisBentukAktif = 'balok';
 let alatAktif = 'gergaji';
 let faseAktif = 'pahat';
 
+// Variabel Kontrol Uji Gempa
+let sedangUjiGempa = false;
+let waktuGempa = 0;
+
 function init3D() {
   const container = document.getElementById('viewport');
+  if (!container) return;
   
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d0d12);
@@ -19,11 +24,14 @@ function init3D() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -33,7 +41,7 @@ function init3D() {
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // Buat Material Tekstur Kayu
+  // Material Tekstur Kayu
   window.woodMaterial = new THREE.MeshStandardMaterial({
     map: buatTeksturKayu(),
     roughness: 0.6,
@@ -45,7 +53,7 @@ function init3D() {
   animate();
 }
 
-// Generasi Tekstur Serat Kayu Alami
+// Generasi Tekstur Serat Kayu Alami via Canvas 2D
 function buatTeksturKayu() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -70,10 +78,16 @@ function buatTeksturKayu() {
   return texture;
 }
 
-// Update Render Objek 3D
+// Update Render Objek 3D & Pembersihan Memori Geometry
 function updateBentuk() {
-  if (objekKayu) scene.remove(objekKayu);
-  if (gridHelper) scene.remove(gridHelper);
+  if (objekKayu) {
+    scene.remove(objekKayu);
+    if (objekKayu.geometry) objekKayu.geometry.dispose();
+  }
+  if (gridHelper) {
+    scene.remove(gridHelper);
+    gridHelper.dispose();
+  }
 
   let geometry;
 
@@ -84,7 +98,7 @@ function updateBentuk() {
 
     geometry = new THREE.BoxGeometry(p, t, l);
     
-    gridHelper = new THREE.GridHelper(Math.max(p, l) * 1.5, 10, 0x4a82e8, 0x333346);
+    gridHelper = new THREE.GridHelper(Math.max(p, l) * 2, 10, 0x4a82e8, 0x333346);
     gridHelper.position.y = -t / 2;
     scene.add(gridHelper);
 
@@ -95,7 +109,7 @@ function updateBentuk() {
 
     geometry = new THREE.CylinderGeometry(r, r, p, 32);
 
-    gridHelper = new THREE.GridHelper(r * 4, 8, 0x4a82e8, 0x333346);
+    gridHelper = new THREE.GridHelper(r * 5, 8, 0x4a82e8, 0x333346);
     gridHelper.position.y = -p / 2;
     scene.add(gridHelper);
   }
@@ -106,15 +120,19 @@ function updateBentuk() {
   scene.add(objekKayu);
 }
 
-// Handler Pemilihan Bahan (Klik & Drag)
+// Handler Pemilihan Bahan
 function pilihBahan(jenis) {
   jenisBentukAktif = jenis;
   
-  document.getElementById('item-balok').classList.toggle('active', jenis === 'balok');
-  document.getElementById('item-silinder').classList.toggle('active', jenis === 'silinder');
+  const elBalok = document.getElementById('item-balok');
+  const elSilinder = document.getElementById('item-silinder');
+  if (elBalok) elBalok.classList.toggle('active', jenis === 'balok');
+  if (elSilinder) elSilinder.classList.toggle('active', jenis === 'silinder');
 
-  document.getElementById('formBalok').style.display = (jenis === 'balok') ? 'flex' : 'none';
-  document.getElementById('formSilinder').style.display = (jenis === 'silinder') ? 'flex' : 'none';
+  const formBalok = document.getElementById('formBalok');
+  const formSilinder = document.getElementById('formSilinder');
+  if (formBalok) formBalok.style.display = (jenis === 'balok') ? 'flex' : 'none';
+  if (formSilinder) formSilinder.style.display = (jenis === 'silinder') ? 'flex' : 'none';
 
   updateBentuk();
 }
@@ -122,12 +140,34 @@ function pilihBahan(jenis) {
 // Handler Pemilihan Alat
 function pilihAlat(alat) {
   alatAktif = alat;
-  document.getElementById('item-gergaji').classList.toggle('active', alat === 'gergaji');
-  document.getElementById('item-pahat').classList.toggle('active', alat === 'pahat');
-  document.getElementById('item-bor').classList.toggle('active', alat === 'bor');
+  ['gergaji', 'pahat', 'bor'].forEach(a => {
+    const el = document.getElementById(`item-${a}`);
+    if (el) el.classList.toggle('active', a === alat);
+  });
 }
 
-// Logika Drag and Drop ke Canvas
+// Handler Fase & Simulasi Gempa
+function setFase(fase) {
+  faseAktif = fase;
+  
+  const btnPahat = document.getElementById('fasePahat');
+  const btnRakit = document.getElementById('faseRakit');
+  const btnUji = document.getElementById('faseUji');
+  
+  if (btnPahat) btnPahat.classList.toggle('active', fase === 'pahat');
+  if (btnRakit) btnRakit.classList.toggle('active', fase === 'rakit');
+  if (btnUji) btnUji.classList.toggle('active', fase === 'uji');
+
+  if (fase === 'uji') {
+    sedangUjiGempa = true;
+    waktuGempa = 0;
+  } else {
+    sedangUjiGempa = false;
+    if (objekKayu) objekKayu.rotation.set(0, 0, 0);
+  }
+}
+
+// Drag & Drop Handlers
 function dragStart(event, jenisBahan) {
   event.dataTransfer.setData('jenisBahan', jenisBahan);
 }
@@ -144,40 +184,37 @@ function handleDrop(event) {
   }
 }
 
-// Control Fase
-function setFase(fase) {
-  faseAktif = fase;
-  document.getElementById('fasePahat').classList.toggle('active', fase === 'pahat');
-  document.getElementById('faseRakit').classList.toggle('active', fase === 'rakit');
-  document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
-
-  if (fase === 'uji') {
-    let count = 0;
-    const interval = setInterval(() => {
-      if (objekKayu) {
-        objekKayu.rotation.x = Math.sin(count * 0.5) * 0.1;
-        objekKayu.rotation.z = Math.cos(count * 0.5) * 0.1;
-      }
-      count++;
-      if (count > 20) {
-        clearInterval(interval);
-        objekKayu.rotation.set(0, 0, 0);
-      }
-    }, 50);
-  }
-}
-
 function onWindowResize() {
   const container = document.getElementById('viewport');
+  if (!container) return;
   camera.aspect = container.clientWidth / container.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
+// Loop Animasi Utama
 function animate() {
   requestAnimationFrame(animate);
+
+  // Efek Getaran Gempa Real-Time
+  if (sedangUjiGempa && objekKayu) {
+    waktuGempa += 0.2;
+    objekKayu.rotation.x = Math.sin(waktuGempa * 3) * 0.08;
+    objekKayu.rotation.z = Math.cos(waktuGempa * 2.5) * 0.08;
+  }
+
   controls.update();
   renderer.render(scene, camera);
 }
 
-window.onload = init3D;
+// Global Scope Binding (Memastikan HTML dapat memanggil fungsi-fungsi ini tanpa error)
+window.pilihBahan = pilihBahan;
+window.pilihAlat = pilihAlat;
+window.setFase = setFase;
+window.updateBentuk = updateBentuk;
+window.dragStart = dragStart;
+window.allowDrop = allowDrop;
+window.handleDrop = handleDrop;
+
+// Jalankan Inisialisasi
+window.addEventListener('DOMContentLoaded', init3D);
