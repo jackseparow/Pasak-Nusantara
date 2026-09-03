@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geoblock - Pasak Nusantara 3D</title>
   
-  <!-- CDN Three.js & OrbitControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
@@ -85,7 +84,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      cursor: grab;
+      cursor: pointer;
       transition: all 0.2s ease;
     }
 
@@ -141,6 +140,7 @@
       flex: 1;
       position: relative;
       background-color: #0d0d12;
+      cursor: crosshair; /* Kursor indikator pemahat */
     }
 
     /* Phase Bar Atas Canvas */
@@ -172,6 +172,17 @@
 
     .btn-phase.active { background: #2a5298; color: #fff; }
     .btn-phase.shake.active { background: #d9534f; }
+
+    /* Petunjuk Bantuan */
+    .hint-box {
+      font-size: 0.72rem;
+      color: #aaa;
+      margin-top: 10px;
+      line-height: 1.3;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -188,67 +199,9 @@
   </header>
 
   <div class="main-container">
-    <!-- Stock Panel Kiri -->
     <div id="stock-panel">
       
-      <!-- 1. Stock Bahan -->
       <div class="stock-section">
         <div class="stock-title">📦 Stock Bahan</div>
         <div class="stock-grid">
-          <div class="stock-item active" id="item-balok" draggable="true" onclick="pilihBahan('balok')" ondragstart="dragStart(event, 'balok')">
-            <div class="stock-icon">🪵</div>
-            <div class="stock-label">Balok Kayu</div>
-          </div>
-          <div class="stock-item" id="item-silinder" draggable="true" onclick="pilihBahan('silinder')" ondragstart="dragStart(event, 'silinder')">
-            <div class="stock-icon">🪵</div>
-            <div class="stock-label">Silinder (Pasak)</div>
-          </div>
-        </div>
-
-        <!-- Form Parameter Bahan -->
-        <div id="formBalok" class="param-group">
-          <div class="param-row"><label>Panjang (X):</label><input type="number" id="balokP" value="10" min="2" max="30" onchange="updateBentuk()"></div>
-          <div class="param-row"><label>Lebar (Y):</label><input type="number" id="balokL" value="10" min="2" max="30" onchange="updateBentuk()"></div>
-          <div class="param-row"><label>Tinggi (Z):</label><input type="number" id="balokT" value="30" min="2" max="50" onchange="updateBentuk()"></div>
-        </div>
-
-        <div id="formSilinder" class="param-group" style="display:none;">
-          <div class="param-row"><label>Panjang (Z):</label><input type="number" id="silinderP" value="25" min="2" max="50" onchange="updateBentuk()"></div>
-          <div class="param-row"><label>Diameter (D):</label><input type="number" id="silinderD" value="6" min="1" max="20" onchange="updateBentuk()"></div>
-        </div>
-      </div>
-
-      <!-- 2. Stock Alat -->
-      <div class="stock-section">
-        <div class="stock-title">🛠️ Stock Alat</div>
-        <div class="stock-grid">
-          <div class="stock-item active" id="item-gergaji" onclick="pilihAlat('gergaji')">
-            <div class="stock-icon">🪚</div>
-            <div class="stock-label">Gergaji</div>
-          </div>
-          <div class="stock-item" id="item-pahat" onclick="pilihAlat('pahat')">
-            <div class="stock-icon">🪛</div>
-            <div class="stock-label">Pahat</div>
-          </div>
-          <div class="stock-item" id="item-bor" onclick="pilihAlat('bor')">
-            <div class="stock-icon">🔘</div>
-            <div class="stock-label">Bor</div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Area 3D Canvas / Drop Target -->
-    <div id="viewport" ondragover="allowDrop(event)" ondrop="handleDrop(event)">
-      <div class="phase-bar">
-        <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
-        <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
-        <button id="faseUji" class="btn-phase shake" onclick="setFase('uji')">3. Uji Gempa</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="js/app.js"></script>
-</body>
-</html>
+          <div
