@@ -1,21 +1,24 @@
 /**
- * Engine 3D Bengkel Pasak Nusantara (Three.js & Stock Interactivity)
+ * Engine 3D Memahat Kayu Interaktif - Pasak Nusantara
  */
 
 let scene, camera, renderer, controls;
 let objekKayu, gridHelper;
+let raycaster, mouse;
+
 let jenisBentukAktif = 'balok';
 let alatAktif = 'gergaji';
 let faseAktif = 'pahat';
 
-// Variabel Kontrol Uji Gempa
+// Variabel Memahat & Simulasi
+let bekasPahatan = []; // Menyimpan koordinat pemahatan/pengeboran
 let sedangUjiGempa = false;
 let waktuGempa = 0;
 
 function init3D() {
   const container = document.getElementById('viewport');
   if (!container) return;
-  
+
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d0d12);
 
@@ -31,29 +34,42 @@ function init3D() {
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
 
+  // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffe8d6, 0.8);
+  const dirLight = new THREE.DirectionalLight(0xffe8d6, 0.9);
   dirLight.position.set(20, 40, 20);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // Material Tekstur Kayu
+  // Setup Raycaster untuk Interaksi Klik Memahat
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  // Material Kayu & Material Bekas Pahatan
   window.woodMaterial = new THREE.MeshStandardMaterial({
     map: buatTeksturKayu(),
     roughness: 0.6,
     metalness: 0.1
   });
 
+  window.cutMaterial = new THREE.MeshStandardMaterial({
+    color: 0x5c3a21, // Warna bagian dalam kayu yang terpahat/terpotong
+    roughness: 0.8
+  });
+
   updateBentuk();
+
+  // Event Listener Interaksi Memahat pada Canvas
+  renderer.domElement.addEventListener('pointerdown', onCanvasClick);
   window.addEventListener('resize', onWindowResize);
+
   animate();
 }
 
-// Generasi Tekstur Serat Kayu Alami via Canvas 2D
+// Generasi Tekstur Serat Kayu Alami
 function buatTeksturKayu() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -64,7 +80,7 @@ function buatTeksturKayu() {
   ctx.fillRect(0, 0, 512, 512);
 
   ctx.fillStyle = '#a67c52';
-  for (let i = 0; i < 400; i++) {
+  for (let i = 0; i < 500; i++) {
     const x = Math.random() * 512;
     const y = Math.random() * 512;
     const w = Math.random() * 2 + 1;
@@ -78,8 +94,12 @@ function buatTeksturKayu() {
   return texture;
 }
 
-// Update Render Objek 3D & Pembersihan Memori Geometry
+// Reset dan Render Ulang Objek Kayu
 function updateBentuk() {
+  // Hapus pahatan lama jika bahan diganti
+  bekasPahatan.forEach(mesh => scene.remove(mesh));
+  bekasPahatan = [];
+
   if (objekKayu) {
     scene.remove(objekKayu);
     if (objekKayu.geometry) objekKayu.geometry.dispose();
@@ -97,42 +117,77 @@ function updateBentuk() {
     const t = parseFloat(document.getElementById('balokT').value) || 30;
 
     geometry = new THREE.BoxGeometry(p, t, l);
-    
     gridHelper = new THREE.GridHelper(Math.max(p, l) * 2, 10, 0x4a82e8, 0x333346);
     gridHelper.position.y = -t / 2;
-    scene.add(gridHelper);
-
   } else {
     const p = parseFloat(document.getElementById('silinderP').value) || 25;
     const d = parseFloat(document.getElementById('silinderD').value) || 6;
     const r = d / 2;
 
     geometry = new THREE.CylinderGeometry(r, r, p, 32);
-
     gridHelper = new THREE.GridHelper(r * 5, 8, 0x4a82e8, 0x333346);
     gridHelper.position.y = -p / 2;
-    scene.add(gridHelper);
   }
 
+  scene.add(gridHelper);
   objekKayu = new THREE.Mesh(geometry, window.woodMaterial);
   objekKayu.castShadow = true;
   objekKayu.receiveShadow = true;
   scene.add(objekKayu);
 }
 
+// Interaksi Memahat Langsung pada Objek Kayu
+function onCanvasClick(event) {
+  if (faseAktif !== 'pahat' || !objekKayu) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObject(objekKayu);
+
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+    pahatKayuDiTitik(hit.point, hit.face.normal);
+  }
+}
+
+// Efek Pemahatan/Pemotongan Berdasarkan Alat yang Dipilih
+function pahatKayuDiTitik(titik, normal) {
+  let pahatGeo;
+
+  if (alatAktif === 'bor') {
+    // Membuat lubang silinder (Bor)
+    pahatGeo = new THREE.CylinderGeometry(1.2, 1.2, 2.5, 16);
+  } else if (alatAktif === 'pahat') {
+    // Membuat Takik/Coakan Persegi (Pahat)
+    pahatGeo = new THREE.BoxGeometry(2, 2, 2);
+  } else if (alatAktif === 'gergaji') {
+    // Membuat Alur Potongan Tipis (Gergaji)
+    pahatGeo = new THREE.BoxGeometry(0.3, 3, 3);
+  }
+
+  const bekas = new THREE.Mesh(pahatGeo, window.cutMaterial);
+  bekas.position.copy(titik);
+
+  // Sesuaikan orientasi pahatan dengan permukaan kayu
+  const target = titik.clone().add(normal);
+  bekas.lookAt(target);
+
+  scene.add(bekas);
+  bekasPahatan.push(bekas);
+}
+
 // Handler Pemilihan Bahan
 function pilihBahan(jenis) {
   jenisBentukAktif = jenis;
-  
-  const elBalok = document.getElementById('item-balok');
-  const elSilinder = document.getElementById('item-silinder');
-  if (elBalok) elBalok.classList.toggle('active', jenis === 'balok');
-  if (elSilinder) elSilinder.classList.toggle('active', jenis === 'silinder');
 
-  const formBalok = document.getElementById('formBalok');
-  const formSilinder = document.getElementById('formSilinder');
-  if (formBalok) formBalok.style.display = (jenis === 'balok') ? 'flex' : 'none';
-  if (formSilinder) formSilinder.style.display = (jenis === 'silinder') ? 'flex' : 'none';
+  document.getElementById('item-balok').classList.toggle('active', jenis === 'balok');
+  document.getElementById('item-silinder').classList.toggle('active', jenis === 'silinder');
+
+  document.getElementById('formBalok').style.display = (jenis === 'balok') ? 'flex' : 'none';
+  document.getElementById('formSilinder').style.display = (jenis === 'silinder') ? 'flex' : 'none';
 
   updateBentuk();
 }
@@ -146,17 +201,13 @@ function pilihAlat(alat) {
   });
 }
 
-// Handler Fase & Simulasi Gempa
+// Handler Kontrol Fase
 function setFase(fase) {
   faseAktif = fase;
-  
-  const btnPahat = document.getElementById('fasePahat');
-  const btnRakit = document.getElementById('faseRakit');
-  const btnUji = document.getElementById('faseUji');
-  
-  if (btnPahat) btnPahat.classList.toggle('active', fase === 'pahat');
-  if (btnRakit) btnRakit.classList.toggle('active', fase === 'rakit');
-  if (btnUji) btnUji.classList.toggle('active', fase === 'uji');
+
+  document.getElementById('fasePahat').classList.toggle('active', fase === 'pahat');
+  document.getElementById('faseRakit').classList.toggle('active', fase === 'rakit');
+  document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
 
   if (fase === 'uji') {
     sedangUjiGempa = true;
@@ -196,18 +247,24 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate);
 
-  // Efek Getaran Gempa Real-Time
+  // Efek Getaran Uji Gempa
   if (sedangUjiGempa && objekKayu) {
     waktuGempa += 0.2;
-    objekKayu.rotation.x = Math.sin(waktuGempa * 3) * 0.08;
-    objekKayu.rotation.z = Math.cos(waktuGempa * 2.5) * 0.08;
+    const getar = Math.sin(waktuGempa * 3) * 0.08;
+    objekKayu.rotation.x = getar;
+    objekKayu.rotation.z = getar;
+
+    bekasPahatan.forEach(b => {
+      b.rotation.x = getar;
+      b.rotation.z = getar;
+    });
   }
 
   controls.update();
   renderer.render(scene, camera);
 }
 
-// Global Scope Binding (Memastikan HTML dapat memanggil fungsi-fungsi ini tanpa error)
+// Binding ke Window Scope agar dipanggil sempurna dari index.html
 window.pilihBahan = pilihBahan;
 window.pilihAlat = pilihAlat;
 window.setFase = setFase;
@@ -216,5 +273,4 @@ window.dragStart = dragStart;
 window.allowDrop = allowDrop;
 window.handleDrop = handleDrop;
 
-// Jalankan Inisialisasi
 window.addEventListener('DOMContentLoaded', init3D);
