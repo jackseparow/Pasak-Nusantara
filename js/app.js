@@ -1,17 +1,16 @@
 /**
  * Engine 3D Bengkel Memahat Pasak Nusantara
- * Interaksi langsung raycasting pemahatan kayu & simulasi getaran
+ * Fitur: Sumbu Koordinat Vertikal (Y) + Perbaikan Visual Silinder/Pasak
  */
 
 let scene, camera, renderer, controls;
-let objekKayu, gridHelper;
+let objekKayu, gridHelper, axesHelper;
 let raycaster, mouse;
 
 let jenisBentukAktif = 'balok';
 let alatAktif = 'gergaji';
 let faseAktif = 'pahat';
 
-// Array penampung objek pahatan di atas permukaan kayu
 let bekasPahatan = [];
 let sedangUjiGempa = false;
 let waktuGempa = 0;
@@ -37,6 +36,13 @@ function init3D() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
+  // 1. TAMBAHKAN SUMBU KOORDINAT 3D (AxesHelper)
+  // Hijau = Vertikal (Y), Merah = X, Biru = Z
+  axesHelper = new THREE.AxesHelper(20);
+  // Menebalkan sumbu agar terlihat jelas
+  axesHelper.renderOrder = 1;
+  scene.add(axesHelper);
+
   // Pencahayaan
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -46,11 +52,10 @@ function init3D() {
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // Setup Raycaster untuk memetakan klik mouse ke koordinat 3D
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
 
-  // Tekstur Kayu Permukaan & Tekstur Bagian Dalam Pahatan
+  // Tekstur Kayu
   window.woodMaterial = new THREE.MeshStandardMaterial({
     map: buatTeksturKayu(),
     roughness: 0.6,
@@ -64,14 +69,12 @@ function init3D() {
 
   updateBentuk();
 
-  // Event Listener Klik Memahat di Canvas
   renderer.domElement.addEventListener('pointerdown', onCanvasClick);
   window.addEventListener('resize', onWindowResize);
 
   animate();
 }
 
-// Generasi Tekstur Serat Kayu Prosedural (Tanpa gambar eksternal)
 function buatTeksturKayu() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -96,7 +99,7 @@ function buatTeksturKayu() {
   return texture;
 }
 
-// Reset dan Render Ulang Objek Kayu
+// Update Render Objek 3D (Silinder & Balok)
 function updateBentuk() {
   // Bersihkan pahatan lama
   bekasPahatan.forEach(mesh => {
@@ -115,33 +118,41 @@ function updateBentuk() {
   }
 
   let geometry;
+  let tinggiObjek = 0;
 
   if (jenisBentukAktif === 'balok') {
     const p = parseFloat(document.getElementById('balokP').value) || 10;
     const l = parseFloat(document.getElementById('balokL').value) || 10;
     const t = parseFloat(document.getElementById('balokT').value) || 30;
 
+    tinggiObjek = t;
     geometry = new THREE.BoxGeometry(p, t, l);
-    gridHelper = new THREE.GridHelper(Math.max(p, l) * 2, 10, 0x4a82e8, 0x333346);
-    gridHelper.position.y = -t / 2;
+    gridHelper = new THREE.GridHelper(Math.max(p, l) * 2.5, 10, 0x4a82e8, 0x333346);
   } else {
-    const p = parseFloat(document.getElementById('silinderP').value) || 25;
-    const d = parseFloat(document.getElementById('silinderD').value) || 6;
+    // 2. PERBAIKAN SILINDER / PASAK
+    const p = parseFloat(document.getElementById('silinderP').value) || 25; // Panjang/Tinggi Vertikal
+    const d = parseFloat(document.getElementById('silinderD').value) || 6;  // Diameter
     const r = d / 2;
 
+    tinggiObjek = p;
+    // CylinderGeometry(radiusAtas, radiusBawah, tinggi, radialSegments)
     geometry = new THREE.CylinderGeometry(r, r, p, 32);
-    gridHelper = new THREE.GridHelper(r * 5, 8, 0x4a82e8, 0x333346);
-    gridHelper.position.y = -p / 2;
+    gridHelper = new THREE.GridHelper(d * 4, 10, 0x4a82e8, 0x333346);
   }
 
+  gridHelper.position.y = 0; // Grid berada tepat di dasar sumbu (Y = 0)
   scene.add(gridHelper);
+
   objekKayu = new THREE.Mesh(geometry, window.woodMaterial);
+  
+  // Posisi Y diatur sebesar (Tinggi / 2) agar bagian alas kayu berada pas di Y = 0 (Grid)
+  objekKayu.position.set(0, tinggiObjek / 2, 0);
+  
   objekKayu.castShadow = true;
   objekKayu.receiveShadow = true;
   scene.add(objekKayu);
 }
 
-// Interaksi Memahat Langsung pada Objek Kayu saat Klik
 function onCanvasClick(event) {
   if (faseAktif !== 'pahat' || !objekKayu) return;
 
@@ -158,7 +169,6 @@ function onCanvasClick(event) {
   }
 }
 
-// Menambahkan Geometri Pahatan Sesuai Alat
 function pahatKayuDiTitik(titik, normal) {
   let pahatGeo;
 
@@ -180,7 +190,6 @@ function pahatKayuDiTitik(titik, normal) {
   bekasPahatan.push(bekas);
 }
 
-// Handler UI Pemilihan Bahan
 function pilihBahan(jenis) {
   jenisBentukAktif = jenis;
 
@@ -197,7 +206,6 @@ function pilihBahan(jenis) {
   updateBentuk();
 }
 
-// Handler UI Pemilihan Alat
 function pilihAlat(alat) {
   alatAktif = alat;
   ['gergaji', 'pahat', 'bor'].forEach(a => {
@@ -206,7 +214,6 @@ function pilihAlat(alat) {
   });
 }
 
-// Handler UI Kontrol Fase & Simulasi Gempa
 function setFase(fase) {
   faseAktif = fase;
 
@@ -223,12 +230,16 @@ function setFase(fase) {
     waktuGempa = 0;
   } else {
     sedangUjiGempa = false;
-    if (objekKayu) objekKayu.rotation.set(0, 0, 0);
-    bekasPahatan.forEach(b => b.rotation.set(0, 0, 0));
+    if (objekKayu) {
+      const t = jenisBentukAktif === 'balok' ? 
+        parseFloat(document.getElementById('balokT').value) || 30 : 
+        parseFloat(document.getElementById('silinderP').value) || 25;
+      objekKayu.position.set(0, t / 2, 0);
+      objekKayu.rotation.set(0, 0, 0);
+    }
   }
 }
 
-// Handlers Drag and Drop
 function dragStart(event, jenisBahan) {
   event.dataTransfer.setData('jenisBahan', jenisBahan);
 }
@@ -253,7 +264,6 @@ function onWindowResize() {
   renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
-// Loop Animasi & Render
 function animate() {
   requestAnimationFrame(animate);
 
@@ -262,18 +272,12 @@ function animate() {
     const getar = Math.sin(waktuGempa * 3) * 0.08;
     objekKayu.rotation.x = getar;
     objekKayu.rotation.z = getar;
-
-    bekasPahatan.forEach(b => {
-      b.rotation.x = getar;
-      b.rotation.z = getar;
-    });
   }
 
   controls.update();
   renderer.render(scene, camera);
 }
 
-// Binding ke Global Scope agar dapat dipanggil langsung oleh eventlistener HTML
 window.pilihBahan = pilihBahan;
 window.pilihAlat = pilihAlat;
 window.setFase = setFase;
