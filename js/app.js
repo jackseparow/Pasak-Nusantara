@@ -1,289 +1,252 @@
-/**
- * Engine 3D Bengkel Memahat Pasak Nusantara
- * Fitur: Sumbu Koordinat Vertikal (Y) + Perbaikan Visual Silinder/Pasak
- */
-
-let scene, camera, renderer, controls;
-let objekKayu, gridHelper, axesHelper;
-let raycaster, mouse;
-
-let jenisBentukAktif = 'balok';
-let alatAktif = 'gergaji';
-let faseAktif = 'pahat';
-
-let bekasPahatan = [];
-let sedangUjiGempa = false;
-let waktuGempa = 0;
-
-function init3D() {
-  const container = document.getElementById('viewport');
-  if (!container) return;
-
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0d0d12);
-
-  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(30, 25, 40);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(container.clientWidth, container.clientHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  container.appendChild(renderer.domElement);
-
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-
-  // 1. TAMBAHKAN SUMBU KOORDINAT 3D (AxesHelper)
-  // Hijau = Vertikal (Y), Merah = X, Biru = Z
-  axesHelper = new THREE.AxesHelper(20);
-  // Menebalkan sumbu agar terlihat jelas
-  axesHelper.renderOrder = 1;
-  scene.add(axesHelper);
-
-  // Pencahayaan
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-  scene.add(ambientLight);
-
-  const dirLight = new THREE.DirectionalLight(0xffe8d6, 0.9);
-  dirLight.position.set(20, 40, 20);
-  dirLight.castShadow = true;
-  scene.add(dirLight);
-
-  raycaster = new THREE.Raycaster();
-  mouse = new THREE.Vector2();
-
-  // Tekstur Kayu
-  window.woodMaterial = new THREE.MeshStandardMaterial({
-    map: buatTeksturKayu(),
-    roughness: 0.6,
-    metalness: 0.1
-  });
-
-  window.cutMaterial = new THREE.MeshStandardMaterial({
-    color: 0x4a2e18,
-    roughness: 0.8
-  });
-
-  updateBentuk();
-
-  renderer.domElement.addEventListener('pointerdown', onCanvasClick);
-  window.addEventListener('resize', onWindowResize);
-
-  animate();
-}
-
-function buatTeksturKayu() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-
-  ctx.fillStyle = '#d2b48c';
-  ctx.fillRect(0, 0, 512, 512);
-
-  ctx.fillStyle = '#a67c52';
-  for (let i = 0; i < 500; i++) {
-    const x = Math.random() * 512;
-    const y = Math.random() * 512;
-    const w = Math.random() * 2 + 1;
-    const h = Math.random() * 80 + 20;
-    ctx.fillRect(x, y, w, h);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  return texture;
-}
-
-// Update Render Objek 3D (Silinder & Balok)
-function updateBentuk() {
-  // Bersihkan pahatan lama
-  bekasPahatan.forEach(mesh => {
-    scene.remove(mesh);
-    if (mesh.geometry) mesh.geometry.dispose();
-  });
-  bekasPahatan = [];
-
-  if (objekKayu) {
-    scene.remove(objekKayu);
-    if (objekKayu.geometry) objekKayu.geometry.dispose();
-  }
-  if (gridHelper) {
-    scene.remove(gridHelper);
-    gridHelper.dispose();
-  }
-
-  let geometry;
-  let tinggiObjek = 0;
-
-  if (jenisBentukAktif === 'balok') {
-    const p = parseFloat(document.getElementById('balokP').value) || 10;
-    const l = parseFloat(document.getElementById('balokL').value) || 10;
-    const t = parseFloat(document.getElementById('balokT').value) || 30;
-
-    tinggiObjek = t;
-    geometry = new THREE.BoxGeometry(p, t, l);
-    gridHelper = new THREE.GridHelper(Math.max(p, l) * 2.5, 10, 0x4a82e8, 0x333346);
-  } else {
-    // 2. PERBAIKAN SILINDER / PASAK
-    const p = parseFloat(document.getElementById('silinderP').value) || 25; // Panjang/Tinggi Vertikal
-    const d = parseFloat(document.getElementById('silinderD').value) || 6;  // Diameter
-    const r = d / 2;
-
-    tinggiObjek = p;
-    // CylinderGeometry(radiusAtas, radiusBawah, tinggi, radialSegments)
-    geometry = new THREE.CylinderGeometry(r, r, p, 32);
-    gridHelper = new THREE.GridHelper(d * 4, 10, 0x4a82e8, 0x333346);
-  }
-
-  gridHelper.position.y = 0; // Grid berada tepat di dasar sumbu (Y = 0)
-  scene.add(gridHelper);
-
-  objekKayu = new THREE.Mesh(geometry, window.woodMaterial);
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geoblock - Pasak Nusantara 3D</title>
   
-  // Posisi Y diatur sebesar (Tinggi / 2) agar bagian alas kayu berada pas di Y = 0 (Grid)
-  objekKayu.position.set(0, tinggiObjek / 2, 0);
-  
-  objekKayu.castShadow = true;
-  objekKayu.receiveShadow = true;
-  scene.add(objekKayu);
-}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-function onCanvasClick(event) {
-  if (faseAktif !== 'pahat' || !objekKayu) return;
-
-  const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(objekKayu);
-
-  if (intersects.length > 0) {
-    const hit = intersects[0];
-    pahatKayuDiTitik(hit.point, hit.face.normal);
-  }
-}
-
-function pahatKayuDiTitik(titik, normal) {
-  let pahatGeo;
-
-  if (alatAktif === 'bor') {
-    pahatGeo = new THREE.CylinderGeometry(1.2, 1.2, 2.5, 16);
-  } else if (alatAktif === 'pahat') {
-    pahatGeo = new THREE.BoxGeometry(2, 2, 2);
-  } else if (alatAktif === 'gergaji') {
-    pahatGeo = new THREE.BoxGeometry(0.3, 3, 3);
-  }
-
-  const bekas = new THREE.Mesh(pahatGeo, window.cutMaterial);
-  bekas.position.copy(titik);
-
-  const target = titik.clone().add(normal);
-  bekas.lookAt(target);
-
-  scene.add(bekas);
-  bekasPahatan.push(bekas);
-}
-
-function pilihBahan(jenis) {
-  jenisBentukAktif = jenis;
-
-  const elBalok = document.getElementById('item-balok');
-  const elSilinder = document.getElementById('item-silinder');
-  if (elBalok) elBalok.classList.toggle('active', jenis === 'balok');
-  if (elSilinder) elSilinder.classList.toggle('active', jenis === 'silinder');
-
-  const formBalok = document.getElementById('formBalok');
-  const formSilinder = document.getElementById('formSilinder');
-  if (formBalok) formBalok.style.display = (jenis === 'balok') ? 'flex' : 'none';
-  if (formSilinder) formSilinder.style.display = (jenis === 'silinder') ? 'flex' : 'none';
-
-  updateBentuk();
-}
-
-function pilihAlat(alat) {
-  alatAktif = alat;
-  ['gergaji', 'pahat', 'bor'].forEach(a => {
-    const el = document.getElementById(`item-${a}`);
-    if (el) el.classList.toggle('active', a === alat);
-  });
-}
-
-function setFase(fase) {
-  faseAktif = fase;
-
-  const btnPahat = document.getElementById('fasePahat');
-  const btnRakit = document.getElementById('faseRakit');
-  const btnUji = document.getElementById('faseUji');
-
-  if (btnPahat) btnPahat.classList.toggle('active', fase === 'pahat');
-  if (btnRakit) btnRakit.classList.toggle('active', fase === 'rakit');
-  if (btnUji) btnUji.classList.toggle('active', fase === 'uji');
-
-  if (fase === 'uji') {
-    sedangUjiGempa = true;
-    waktuGempa = 0;
-  } else {
-    sedangUjiGempa = false;
-    if (objekKayu) {
-      const t = jenisBentukAktif === 'balok' ? 
-        parseFloat(document.getElementById('balokT').value) || 30 : 
-        parseFloat(document.getElementById('silinderP').value) || 25;
-      objekKayu.position.set(0, t / 2, 0);
-      objekKayu.rotation.set(0, 0, 0);
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #121218;
+      color: #fff;
     }
-  }
-}
+    
+    header {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      z-index: 10;
+    }
+    .logo-container { display: flex; align-items: center; gap: 12px; }
+    .header-logo { height: 38px; width: auto; }
+    .title-group h1 { font-size: 1.1rem; font-weight: 700; }
+    .title-group p { font-size: 0.75rem; opacity: 0.85; }
 
-function dragStart(event, jenisBahan) {
-  event.dataTransfer.setData('jenisBahan', jenisBahan);
-}
+    .main-container { display: flex; flex: 1; height: calc(100vh - 58px); }
+    
+    #stock-panel {
+      width: 280px;
+      background-color: #1e1e28;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      border-right: 1px solid #2e2e3e;
+      overflow-y: auto;
+      user-select: none;
+    }
 
-function allowDrop(event) {
-  event.preventDefault();
-}
+    .stock-section {
+      background-color: #252535;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #333346;
+    }
 
-function handleDrop(event) {
-  event.preventDefault();
-  const jenisBahan = event.dataTransfer.getData('jenisBahan');
-  if (jenisBahan) {
-    pilihBahan(jenisBahan);
-  }
-}
+    .stock-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #4a82e8;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
 
-function onWindowResize() {
-  const container = document.getElementById('viewport');
-  if (!container) return;
-  camera.aspect = container.clientWidth / container.clientHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(container.clientWidth, container.clientHeight);
-}
+    .stock-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
 
-function animate() {
-  requestAnimationFrame(animate);
+    .stock-item {
+      background-color: #1a1a24;
+      border: 2px solid #3b3b52;
+      border-radius: 8px;
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
 
-  if (sedangUjiGempa && objekKayu) {
-    waktuGempa += 0.2;
-    const getar = Math.sin(waktuGempa * 3) * 0.08;
-    objekKayu.rotation.x = getar;
-    objekKayu.rotation.z = getar;
-  }
+    .stock-item:hover {
+      border-color: #4a82e8;
+      background-color: #2a2a3c;
+      transform: translateY(-2px);
+    }
 
-  controls.update();
-  renderer.render(scene, camera);
-}
+    .stock-item.active {
+      border-color: #4a82e8;
+      background-color: #2a5298;
+    }
 
-window.pilihBahan = pilihBahan;
-window.pilihAlat = pilihAlat;
-window.setFase = setFase;
-window.updateBentuk = updateBentuk;
-window.dragStart = dragStart;
-window.allowDrop = allowDrop;
-window.handleDrop = handleDrop;
+    .stock-icon { font-size: 2rem; }
+    .stock-label { font-size: 0.75rem; font-weight: 600; color: #ddd; text-align: center; }
 
-window.addEventListener('DOMContentLoaded', init3D);
+    .param-group {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .param-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+    }
+
+    .param-row input {
+      width: 60px;
+      padding: 4px;
+      border-radius: 4px;
+      border: 1px solid #4a4a60;
+      background: #121218;
+      color: #fff;
+      text-align: center;
+    }
+
+    #viewport {
+      flex: 1;
+      position: relative;
+      background-color: #0d0d12;
+      cursor: crosshair;
+    }
+
+    .phase-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(25, 25, 35, 0.85);
+      padding: 6px;
+      border-radius: 8px;
+      backdrop-filter: blur(4px);
+      border: 1px solid #3b3b52;
+      z-index: 5;
+    }
+
+    .btn-phase {
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      color: #aaa;
+      font-weight: 600;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-phase.active { background: #2a5298; color: #fff; }
+    .btn-phase.shake.active { background: #d9534f; }
+
+    .hint-box {
+      font-size: 0.72rem;
+      color: #aaa;
+      margin-top: 10px;
+      line-height: 1.35;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 10px;
+      border-radius: 6px;
+      border-left: 3px solid #4a82e8;
+    }
+
+    /* Penjelasan Sumbu Koordinat */
+    .axis-legend {
+      font-size: 0.7rem;
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .axis-item { display: flex; align-items: center; gap: 6px; }
+    .axis-color { width: 10px; height: 10px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo-container">
+      <img src="assets/logo-bbgtk.png" alt="BBGTK" class="header-logo" onerror="this.style.display='none'">
+      <img src="assets/logo-taman-numerasi.png" alt="Taman Numerasi" class="header-logo" onerror="this.style.display='none'">
+      <div class="title-group">
+        <h1>GEOBLOCK 3D: PASAK NUSANTARA</h1>
+        <p>Eksplorasi Geometri & Sambungan Kayu Tradisional</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <div id="stock-panel">
+      
+      <div class="stock-section">
+        <div class="stock-title">📦 Stock Bahan</div>
+        <div class="stock-grid">
+          <div class="stock-item active" id="item-balok" onclick="pilihBahan('balok')">
+            <div class="stock-icon">🪵</div>
+            <div class="stock-label">Balok Kayu</div>
+          </div>
+          <div class="stock-item" id="item-silinder" onclick="pilihBahan('silinder')">
+            <div class="stock-icon">🪵</div>
+            <div class="stock-label">Silinder (Pasak)</div>
+          </div>
+        </div>
+
+        <div id="formBalok" class="param-group">
+          <div class="param-row"><label>Panjang (X):</label><input type="number" id="balokP" value="10" min="2" max="30" oninput="updateBentuk()"></div>
+          <div class="param-row"><label>Lebar (Z):</label><input type="number" id="balokL" value="10" min="2" max="30" oninput="updateBentuk()"></div>
+          <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="balokT" value="30" min="2" max="50" oninput="updateBentuk()"></div>
+        </div>
+
+        <div id="formSilinder" class="param-group" style="display:none;">
+          <div class="param-row"><label>Panjang/Tinggi (Y):</label><input type="number" id="silinderP" value="25" min="2" max="50" oninput="updateBentuk()"></div>
+          <div class="param-row"><label>Diameter (D):</label><input type="number" id="silinderD" value="8" min="1" max="20" oninput="updateBentuk()"></div>
+        </div>
+      </div>
+
+      <div class="stock-section">
+        <div class="stock-title">🛠️ Stock Alat</div>
+        <div class="stock-grid">
+          <div class="stock-item active" id="item-gergaji" onclick="pilihAlat('gergaji')">
+            <div class="stock-icon">🪚</div>
+            <div class="stock-label">Gergaji</div>
+          </div>
+          <div class="stock-item" id="item-pahat" onclick="pilihAlat('pahat')">
+            <div class="stock-icon">🪛</div>
+            <div class="stock-label">Pahat</div>
+          </div>
+          <div class="stock-item" id="item-bor" onclick="pilihAlat('bor')">
+            <div class="stock-icon">🔘</div>
+            <div class="stock-label">Bor</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint-box">
+        📍 <strong>Sumbu Koordinat 3D:</strong>
+        <div class="axis-legend">
+          <div class="axis-item"><div class="axis-color" style="background:#00ff00;"></div> <span><strong>Sumbu Y (Hijau):</strong> Vertikal / Tinggi</span></div>
+          <div class="axis-item"><div class="axis-color" style="background:#ff0000;"></div> <span><strong>Sumbu X (Merah):</strong> Horizontal / Panjang</span></div>
+          <div class="axis-item"><div class="axis-color" style="background:#0000ff;"></div> <span><strong>Sumbu Z (Biru):</strong> Kedalaman / Lebar</span></div>
+        </div>
+      </div>
+
+    </div>
