@@ -5,135 +5,106 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geoblock - Pasak Nusantara 3D</title>
   
-  <script src="https://unpkg.com/blockly/blockly_compressed.js"></script>
-  <script src="https://unpkg.com/blockly/blocks_compressed.js"></script>
-  <script src="https://unpkg.com/blockly/javascript_compressed.js"></script>
-  <script src="https://unpkg.com/blockly/msg/id.js"></script>
+  <!-- CDN Three.js & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       display: flex;
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
-      background-color: #f4f6f9;
+      background-color: #1a1a24;
+      color: #fff;
     }
     
-    /* Header & Banner Identitas */
+    /* Header Identitas */
     header {
       background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-      color: white;
-      padding: 10px 24px;
+      padding: 10px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
       z-index: 10;
     }
-    .logo-container {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .header-logo {
-      height: 42px;
-      width: auto;
-      object-fit: contain;
-      filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.2));
-    }
-    .title-group h1 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-    }
-    .title-group p {
-      font-size: 0.8rem;
-      opacity: 0.85;
-    }
+    .logo-container { display: flex; align-items: center; gap: 12px; }
+    .header-logo { height: 38px; width: auto; }
+    .title-group h1 { font-size: 1.1rem; font-weight: 700; }
+    .title-group p { font-size: 0.75rem; opacity: 0.85; }
+
+    /* Main Workspace */
+    .main-container { display: flex; flex: 1; height: calc(100vh - 58px); }
     
-    /* Main Layout */
-    .main-container {
-      display: flex;
-      flex: 1;
-      height: calc(100vh - 62px);
-    }
-    #blocklyDiv {
-      height: 100%;
-      width: 55%;
-    }
-    #previewContainer {
-      width: 45%;
-      height: 100%;
-      background-color: #1a1a24;
+    /* Panel Kontrol Alat Kiri */
+    #sidebar {
+      width: 320px;
+      background-color: #232332;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      border-left: 2px solid #333;
+      gap: 16px;
+      border-right: 1px solid #333348;
+      overflow-y: auto;
     }
-
-    /* Modul Kontrol Fase Game */
-    .phase-control-bar {
-      background-color: #252533;
-      padding: 10px 16px;
-      display: flex;
-      gap: 8px;
-      border-bottom: 1px solid #3a3a4d;
-    }
-    .btn-phase {
-      flex: 1;
-      padding: 8px 12px;
-      border: 1px solid #4a4a60;
+    .panel-section {
       background-color: #2d2d3f;
-      color: #a0a0b8;
-      font-size: 0.82rem;
-      font-weight: 600;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #3b3b52;
     }
-    .btn-phase:hover {
-      background-color: #3b3b52;
-      color: #ffffff;
-    }
-    .btn-phase.active {
-      background-color: #2a5298;
-      color: #ffffff;
-      border-color: #4a82e8;
-      box-shadow: 0 2px 6px rgba(42, 82, 152, 0.4);
-    }
-    .btn-phase.shake-btn.active {
-      background-color: #d9534f;
-      border-color: #ff6b67;
-      box-shadow: 0 2px 6px rgba(217, 83, 79, 0.4);
-    }
-
-    .preview-header {
-      background-color: #1e1e2a;
-      color: #8a8a9e;
-      padding: 6px 16px;
-      font-size: 0.75rem;
-      font-weight: 600;
+    .panel-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #4a82e8;
+      margin-bottom: 10px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    #codeOutput {
-      flex: 1;
-      padding: 16px;
-      color: #a6e22e;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 0.88rem;
-      white-space: pre-wrap;
-      overflow-y: auto;
+    
+    /* Pilihan Bentuk */
+    .shape-selector { display: flex; gap: 8px; margin-bottom: 12px; }
+    .btn-shape {
+      flex: 1; padding: 8px; border: 1px solid #4a4a60; background: #232332;
+      color: #ccc; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
     }
+    .btn-shape.active { background: #2a5298; color: #fff; border-color: #4a82e8; }
+
+    /* Form Input Dimensi */
+    .input-group { display: flex; flex-direction: column; gap: 8px; }
+    .input-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; }
+    .input-row label { color: #bbb; }
+    .input-row input {
+      width: 70px; padding: 4px 8px; border-radius: 4px; border: 1px solid #4a4a60;
+      background: #1a1a24; color: #fff; text-align: center; font-weight: bold;
+    }
+
+    /* Pilihan Alat Pahat */
+    .tool-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .btn-tool {
+      padding: 10px 4px; border: 1px solid #4a4a60; background: #232332;
+      color: #ccc; border-radius: 6px; cursor: pointer; font-size: 0.75rem; text-align: center;
+    }
+    .btn-tool.active { background: #d9534f; color: #fff; border-color: #ff6b67; }
+
+    /* Canvas 3D */
+    #viewport { flex: 1; position: relative; background-color: #121218; }
+
+    /* Tombol Fase Atas Canvas */
+    .phase-bar {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 8px; background: rgba(35, 35, 50, 0.85);
+      padding: 6px; border-radius: 8px; backdrop-filter: blur(4px); border: 1px solid #3b3b52;
+    }
+    .btn-phase {
+      padding: 6px 14px; border: none; background: transparent; color: #aaa;
+      font-weight: 600; font-size: 0.8rem; border-radius: 4px; cursor: pointer;
+    }
+    .btn-phase.active { background: #2a5298; color: #fff; }
+    .btn-phase.shake.active { background: #d9534f; }
   </style>
 </head>
 <body>
@@ -144,59 +115,89 @@
       <img src="assets/logo-taman-numerasi.png" alt="Taman Numerasi" class="header-logo" onerror="this.style.display='none'">
       <div class="title-group">
         <h1>GEOBLOCK 3D: PASAK NUSANTARA</h1>
-        <p>Eksplorasi Geometri & Sambungan Kayu Tradisional</p>
+        <p>Bengkel Eksplorasi Geometri & Sambungan Kayu</p>
       </div>
     </div>
   </header>
 
   <div class="main-container">
-    <div id="blocklyDiv"></div>
-    <div id="previewContainer">
+    <!-- Panel Samping / Kontrol Parametrik -->
+    <div id="sidebar">
       
-      <div class="phase-control-bar">
-        <button id="btnPahat" class="btn-phase active" onclick="setFase('pahat')">
-          <span>1. Pahat</span>
-        </button>
-        <button id="btnRakit" class="btn-phase" onclick="setFase('rakit')">
-          <span>2. Pasang</span>
-        </button>
-        <button id="btnUji" class="btn-phase shake-btn" onclick="setFase('uji')">
-          <span>3. Uji Gempa</span>
-        </button>
+      <!-- 1. Pilihan Bentuk & Ukuran -->
+      <div class="panel-section">
+        <div class="panel-title">1. Pilih & Ukur Kayu</div>
+        <div class="shape-selector">
+          <button id="btnBalok" class="btn-shape active" onclick="pilihBentuk('balok')">Balok</button>
+          <button id="btnSilinder" class="btn-shape" onclick="pilihBentuk('silinder')">Silinder (Pasak)</button>
+        </div>
+
+        <!-- Form Balok -->
+        <div id="formBalok" class="input-group">
+          <div class="input-row">
+            <label>Panjang (X):</label>
+            <input type="number" id="balokP" value="10" min="2" max="30" onchange="updateBentuk()">
+          </div>
+          <div class="input-row">
+            <label>Lebar (Y):</label>
+            <input type="number" id="balokL" value="10" min="2" max="30" onchange="updateBentuk()">
+          </div>
+          <div class="input-row">
+            <label>Tinggi (Z):</label>
+            <input type="number" id="balokT" value="30" min="2" max="50" onchange="updateBentuk()">
+          </div>
+        </div>
+
+        <!-- Form Silinder -->
+        <div id="formSilinder" class="input-group" style="display:none;">
+          <div class="input-row">
+            <label>Panjang (Z):</label>
+            <input type="number" id="silinderP" value="25" min="2" max="50" onchange="updateBentuk()">
+          </div>
+          <div class="input-row">
+            <label>Diameter (D):</label>
+            <input type="number" id="silinderD" value="6" min="1" max="20" onchange="updateBentuk()">
+          </div>
+        </div>
       </div>
 
-      <div class="preview-header">
-        <span id="phaseStatus">Fase 1: Pahat Modul 3D</span>
+      <!-- 2. Peralatan Pahat & Ukur -->
+      <div class="panel-section">
+        <div class="panel-title">2. Alat Bengkel</div>
+        <div class="tool-selector">
+          <button class="btn-tool active" onclick="pilihAlat('gergaji')">🪚 Gergaji</button>
+          <button class="btn-tool" onclick="pilihAlat('pahat')">🪛 Pahat</button>
+          <button class="btn-tool" onclick="pilihAlat('bor')">🔘 Bor</button>
+        </div>
       </div>
-      <pre id="codeOutput">// Susun blok di sebelah kiri untuk merancang Pasak Nusantara...</pre>
+
+      <!-- 3. Parameter Pahat/Pemotongan -->
+      <div class="panel-section">
+        <div class="panel-title">3. Parameter Pahat</div>
+        <div class="input-group">
+          <div class="input-row">
+            <label>Kedalaman (Kedalam Grid):</label>
+            <input type="number" id="pahatDalam" value="2" min="1" max="10">
+          </div>
+          <div class="input-row">
+            <label>Sudut Potong (°):</label>
+            <input type="number" id="pahatSudut" value="90" step="15" min="0" max="180">
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Area Display 3D -->
+    <div id="viewport">
+      <div class="phase-bar">
+        <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
+        <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
+        <button id="faseUji" class="btn-phase shake" onclick="setFase('uji')">3. Uji Gempa</button>
+      </div>
     </div>
   </div>
 
-  <xml id="toolbox" style="display: none">
-    <category name="Bentuk Kayu" colour="35">
-      <block type="balok_kayu">
-        <value name="PANJANG">
-          <shadow type="math_number"><field name="NUM">10</field></shadow>
-        </value>
-        <value name="LEBAR">
-          <shadow type="math_number"><field name="NUM">10</field></shadow>
-        </value>
-        <value name="TINGGI">
-          <shadow type="math_number"><field name="NUM">50</field></shadow>
-        </value>
-      </block>
-    </category>
-    <category name="Pasak & Pahat" colour="160">
-      <block type="gabung_purus"></block>
-      <block type="potong_lubang"></block>
-    </category>
-    <category name="Angka" colour="230">
-      <block type="math_number"></block>
-    </category>
-  </xml>
-
-  <script src="js/blocks.js"></script>
-  <script src="js/generators.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
