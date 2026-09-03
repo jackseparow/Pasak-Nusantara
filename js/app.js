@@ -1,5 +1,6 @@
 /**
- * Engine 3D Memahat Kayu Interaktif - Pasak Nusantara
+ * Engine 3D Bengkel Memahat Pasak Nusantara
+ * Interaksi langsung raycasting pemahatan kayu & simulasi getaran
  */
 
 let scene, camera, renderer, controls;
@@ -10,8 +11,8 @@ let jenisBentukAktif = 'balok';
 let alatAktif = 'gergaji';
 let faseAktif = 'pahat';
 
-// Variabel Memahat & Simulasi
-let bekasPahatan = []; // Menyimpan koordinat pemahatan/pengeboran
+// Array penampung objek pahatan di atas permukaan kayu
+let bekasPahatan = [];
 let sedangUjiGempa = false;
 let waktuGempa = 0;
 
@@ -34,8 +35,9 @@ function init3D() {
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
 
-  // Lighting
+  // Pencahayaan
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
 
@@ -44,11 +46,11 @@ function init3D() {
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // Setup Raycaster untuk Interaksi Klik Memahat
+  // Setup Raycaster untuk memetakan klik mouse ke koordinat 3D
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
 
-  // Material Kayu & Material Bekas Pahatan
+  // Tekstur Kayu Permukaan & Tekstur Bagian Dalam Pahatan
   window.woodMaterial = new THREE.MeshStandardMaterial({
     map: buatTeksturKayu(),
     roughness: 0.6,
@@ -56,20 +58,20 @@ function init3D() {
   });
 
   window.cutMaterial = new THREE.MeshStandardMaterial({
-    color: 0x5c3a21, // Warna bagian dalam kayu yang terpahat/terpotong
+    color: 0x4a2e18,
     roughness: 0.8
   });
 
   updateBentuk();
 
-  // Event Listener Interaksi Memahat pada Canvas
+  // Event Listener Klik Memahat di Canvas
   renderer.domElement.addEventListener('pointerdown', onCanvasClick);
   window.addEventListener('resize', onWindowResize);
 
   animate();
 }
 
-// Generasi Tekstur Serat Kayu Alami
+// Generasi Tekstur Serat Kayu Prosedural (Tanpa gambar eksternal)
 function buatTeksturKayu() {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -96,8 +98,11 @@ function buatTeksturKayu() {
 
 // Reset dan Render Ulang Objek Kayu
 function updateBentuk() {
-  // Hapus pahatan lama jika bahan diganti
-  bekasPahatan.forEach(mesh => scene.remove(mesh));
+  // Bersihkan pahatan lama
+  bekasPahatan.forEach(mesh => {
+    scene.remove(mesh);
+    if (mesh.geometry) mesh.geometry.dispose();
+  });
   bekasPahatan = [];
 
   if (objekKayu) {
@@ -136,7 +141,7 @@ function updateBentuk() {
   scene.add(objekKayu);
 }
 
-// Interaksi Memahat Langsung pada Objek Kayu
+// Interaksi Memahat Langsung pada Objek Kayu saat Klik
 function onCanvasClick(event) {
   if (faseAktif !== 'pahat' || !objekKayu) return;
 
@@ -153,25 +158,21 @@ function onCanvasClick(event) {
   }
 }
 
-// Efek Pemahatan/Pemotongan Berdasarkan Alat yang Dipilih
+// Menambahkan Geometri Pahatan Sesuai Alat
 function pahatKayuDiTitik(titik, normal) {
   let pahatGeo;
 
   if (alatAktif === 'bor') {
-    // Membuat lubang silinder (Bor)
     pahatGeo = new THREE.CylinderGeometry(1.2, 1.2, 2.5, 16);
   } else if (alatAktif === 'pahat') {
-    // Membuat Takik/Coakan Persegi (Pahat)
     pahatGeo = new THREE.BoxGeometry(2, 2, 2);
   } else if (alatAktif === 'gergaji') {
-    // Membuat Alur Potongan Tipis (Gergaji)
     pahatGeo = new THREE.BoxGeometry(0.3, 3, 3);
   }
 
   const bekas = new THREE.Mesh(pahatGeo, window.cutMaterial);
   bekas.position.copy(titik);
 
-  // Sesuaikan orientasi pahatan dengan permukaan kayu
   const target = titik.clone().add(normal);
   bekas.lookAt(target);
 
@@ -179,20 +180,24 @@ function pahatKayuDiTitik(titik, normal) {
   bekasPahatan.push(bekas);
 }
 
-// Handler Pemilihan Bahan
+// Handler UI Pemilihan Bahan
 function pilihBahan(jenis) {
   jenisBentukAktif = jenis;
 
-  document.getElementById('item-balok').classList.toggle('active', jenis === 'balok');
-  document.getElementById('item-silinder').classList.toggle('active', jenis === 'silinder');
+  const elBalok = document.getElementById('item-balok');
+  const elSilinder = document.getElementById('item-silinder');
+  if (elBalok) elBalok.classList.toggle('active', jenis === 'balok');
+  if (elSilinder) elSilinder.classList.toggle('active', jenis === 'silinder');
 
-  document.getElementById('formBalok').style.display = (jenis === 'balok') ? 'flex' : 'none';
-  document.getElementById('formSilinder').style.display = (jenis === 'silinder') ? 'flex' : 'none';
+  const formBalok = document.getElementById('formBalok');
+  const formSilinder = document.getElementById('formSilinder');
+  if (formBalok) formBalok.style.display = (jenis === 'balok') ? 'flex' : 'none';
+  if (formSilinder) formSilinder.style.display = (jenis === 'silinder') ? 'flex' : 'none';
 
   updateBentuk();
 }
 
-// Handler Pemilihan Alat
+// Handler UI Pemilihan Alat
 function pilihAlat(alat) {
   alatAktif = alat;
   ['gergaji', 'pahat', 'bor'].forEach(a => {
@@ -201,13 +206,17 @@ function pilihAlat(alat) {
   });
 }
 
-// Handler Kontrol Fase
+// Handler UI Kontrol Fase & Simulasi Gempa
 function setFase(fase) {
   faseAktif = fase;
 
-  document.getElementById('fasePahat').classList.toggle('active', fase === 'pahat');
-  document.getElementById('faseRakit').classList.toggle('active', fase === 'rakit');
-  document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
+  const btnPahat = document.getElementById('fasePahat');
+  const btnRakit = document.getElementById('faseRakit');
+  const btnUji = document.getElementById('faseUji');
+
+  if (btnPahat) btnPahat.classList.toggle('active', fase === 'pahat');
+  if (btnRakit) btnRakit.classList.toggle('active', fase === 'rakit');
+  if (btnUji) btnUji.classList.toggle('active', fase === 'uji');
 
   if (fase === 'uji') {
     sedangUjiGempa = true;
@@ -215,10 +224,11 @@ function setFase(fase) {
   } else {
     sedangUjiGempa = false;
     if (objekKayu) objekKayu.rotation.set(0, 0, 0);
+    bekasPahatan.forEach(b => b.rotation.set(0, 0, 0));
   }
 }
 
-// Drag & Drop Handlers
+// Handlers Drag and Drop
 function dragStart(event, jenisBahan) {
   event.dataTransfer.setData('jenisBahan', jenisBahan);
 }
@@ -243,11 +253,10 @@ function onWindowResize() {
   renderer.setSize(container.clientWidth, container.clientHeight);
 }
 
-// Loop Animasi Utama
+// Loop Animasi & Render
 function animate() {
   requestAnimationFrame(animate);
 
-  // Efek Getaran Uji Gempa
   if (sedangUjiGempa && objekKayu) {
     waktuGempa += 0.2;
     const getar = Math.sin(waktuGempa * 3) * 0.08;
@@ -264,7 +273,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-// Binding ke Window Scope agar dipanggil sempurna dari index.html
+// Binding ke Global Scope agar dapat dipanggil langsung oleh eventlistener HTML
 window.pilihBahan = pilihBahan;
 window.pilihAlat = pilihAlat;
 window.setFase = setFase;
