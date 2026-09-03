@@ -17,7 +17,7 @@
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
-      background-color: #1a1a24;
+      background-color: #121218;
       color: #fff;
     }
     
@@ -36,73 +36,140 @@
     .title-group h1 { font-size: 1.1rem; font-weight: 700; }
     .title-group p { font-size: 0.75rem; opacity: 0.85; }
 
-    /* Main Workspace */
+    /* Layout Utama */
     .main-container { display: flex; flex: 1; height: calc(100vh - 58px); }
     
-    /* Panel Kontrol Alat Kiri */
-    #sidebar {
-      width: 320px;
-      background-color: #232332;
+    /* Stock Panel Kiri */
+    #stock-panel {
+      width: 280px;
+      background-color: #1e1e28;
       padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
-      border-right: 1px solid #333348;
+      gap: 20px;
+      border-right: 1px solid #2e2e3e;
       overflow-y: auto;
+      user-select: none;
     }
-    .panel-section {
-      background-color: #2d2d3f;
+
+    .stock-section {
+      background-color: #252535;
       padding: 12px;
       border-radius: 8px;
-      border: 1px solid #3b3b52;
+      border: 1px solid #333346;
     }
-    .panel-title {
+
+    .stock-title {
       font-size: 0.85rem;
       font-weight: 700;
       color: #4a82e8;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    
-    /* Pilihan Bentuk */
-    .shape-selector { display: flex; gap: 8px; margin-bottom: 12px; }
-    .btn-shape {
-      flex: 1; padding: 8px; border: 1px solid #4a4a60; background: #232332;
-      color: #ccc; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.8rem;
-    }
-    .btn-shape.active { background: #2a5298; color: #fff; border-color: #4a82e8; }
 
-    /* Form Input Dimensi */
-    .input-group { display: flex; flex-direction: column; gap: 8px; }
-    .input-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; }
-    .input-row label { color: #bbb; }
-    .input-row input {
-      width: 70px; padding: 4px 8px; border-radius: 4px; border: 1px solid #4a4a60;
-      background: #1a1a24; color: #fff; text-align: center; font-weight: bold;
+    /* Grid Kartu Bahan & Alat */
+    .stock-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
     }
 
-    /* Pilihan Alat Pahat */
-    .tool-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-    .btn-tool {
-      padding: 10px 4px; border: 1px solid #4a4a60; background: #232332;
-      color: #ccc; border-radius: 6px; cursor: pointer; font-size: 0.75rem; text-align: center;
+    .stock-item {
+      background-color: #1a1a24;
+      border: 2px solid #3b3b52;
+      border-radius: 8px;
+      padding: 12px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: grab;
+      transition: all 0.2s ease;
     }
-    .btn-tool.active { background: #d9534f; color: #fff; border-color: #ff6b67; }
 
-    /* Canvas 3D */
-    #viewport { flex: 1; position: relative; background-color: #121218; }
+    .stock-item:hover {
+      border-color: #4a82e8;
+      background-color: #2a2a3c;
+      transform: translateY(-2px);
+    }
 
-    /* Tombol Fase Atas Canvas */
+    .stock-item.active {
+      border-color: #4a82e8;
+      background-color: #2a5298;
+    }
+
+    .stock-icon {
+      font-size: 2rem;
+    }
+
+    .stock-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #ddd;
+      text-align: center;
+    }
+
+    /* Panel Parameter Dimensi */
+    .param-group {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .param-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+    }
+
+    .param-row input {
+      width: 60px;
+      padding: 4px;
+      border-radius: 4px;
+      border: 1px solid #4a4a60;
+      background: #121218;
+      color: #fff;
+      text-align: center;
+    }
+
+    /* Area Display 3D */
+    #viewport {
+      flex: 1;
+      position: relative;
+      background-color: #0d0d12;
+    }
+
+    /* Phase Bar Atas Canvas */
     .phase-bar {
-      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 8px; background: rgba(35, 35, 50, 0.85);
-      padding: 6px; border-radius: 8px; backdrop-filter: blur(4px); border: 1px solid #3b3b52;
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(25, 25, 35, 0.85);
+      padding: 6px;
+      border-radius: 8px;
+      backdrop-filter: blur(4px);
+      border: 1px solid #3b3b52;
+      z-index: 5;
     }
+
     .btn-phase {
-      padding: 6px 14px; border: none; background: transparent; color: #aaa;
-      font-weight: 600; font-size: 0.8rem; border-radius: 4px; cursor: pointer;
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      color: #aaa;
+      font-weight: 600;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
     }
+
     .btn-phase.active { background: #2a5298; color: #fff; }
     .btn-phase.shake.active { background: #d9534f; }
   </style>
@@ -115,81 +182,65 @@
       <img src="assets/logo-taman-numerasi.png" alt="Taman Numerasi" class="header-logo" onerror="this.style.display='none'">
       <div class="title-group">
         <h1>GEOBLOCK 3D: PASAK NUSANTARA</h1>
-        <p>Bengkel Eksplorasi Geometri & Sambungan Kayu</p>
+        <p>Eksplorasi Geometri & Sambungan Kayu Tradisional</p>
       </div>
     </div>
   </header>
 
   <div class="main-container">
-    <!-- Panel Samping / Kontrol Parametrik -->
-    <div id="sidebar">
+    <!-- Stock Panel Kiri -->
+    <div id="stock-panel">
       
-      <!-- 1. Pilihan Bentuk & Ukuran -->
-      <div class="panel-section">
-        <div class="panel-title">1. Pilih & Ukur Kayu</div>
-        <div class="shape-selector">
-          <button id="btnBalok" class="btn-shape active" onclick="pilihBentuk('balok')">Balok</button>
-          <button id="btnSilinder" class="btn-shape" onclick="pilihBentuk('silinder')">Silinder (Pasak)</button>
-        </div>
-
-        <!-- Form Balok -->
-        <div id="formBalok" class="input-group">
-          <div class="input-row">
-            <label>Panjang (X):</label>
-            <input type="number" id="balokP" value="10" min="2" max="30" onchange="updateBentuk()">
+      <!-- 1. Stock Bahan -->
+      <div class="stock-section">
+        <div class="stock-title">📦 Stock Bahan</div>
+        <div class="stock-grid">
+          <div class="stock-item active" id="item-balok" draggable="true" onclick="pilihBahan('balok')" ondragstart="dragStart(event, 'balok')">
+            <div class="stock-icon">🪵</div>
+            <div class="stock-label">Balok Kayu</div>
           </div>
-          <div class="input-row">
-            <label>Lebar (Y):</label>
-            <input type="number" id="balokL" value="10" min="2" max="30" onchange="updateBentuk()">
-          </div>
-          <div class="input-row">
-            <label>Tinggi (Z):</label>
-            <input type="number" id="balokT" value="30" min="2" max="50" onchange="updateBentuk()">
+          <div class="stock-item" id="item-silinder" draggable="true" onclick="pilihBahan('silinder')" ondragstart="dragStart(event, 'silinder')">
+            <div class="stock-icon">🪵</div>
+            <div class="stock-label">Silinder (Pasak)</div>
           </div>
         </div>
 
-        <!-- Form Silinder -->
-        <div id="formSilinder" class="input-group" style="display:none;">
-          <div class="input-row">
-            <label>Panjang (Z):</label>
-            <input type="number" id="silinderP" value="25" min="2" max="50" onchange="updateBentuk()">
-          </div>
-          <div class="input-row">
-            <label>Diameter (D):</label>
-            <input type="number" id="silinderD" value="6" min="1" max="20" onchange="updateBentuk()">
-          </div>
+        <!-- Form Parameter Bahan -->
+        <div id="formBalok" class="param-group">
+          <div class="param-row"><label>Panjang (X):</label><input type="number" id="balokP" value="10" min="2" max="30" onchange="updateBentuk()"></div>
+          <div class="param-row"><label>Lebar (Y):</label><input type="number" id="balokL" value="10" min="2" max="30" onchange="updateBentuk()"></div>
+          <div class="param-row"><label>Tinggi (Z):</label><input type="number" id="balokT" value="30" min="2" max="50" onchange="updateBentuk()"></div>
+        </div>
+
+        <div id="formSilinder" class="param-group" style="display:none;">
+          <div class="param-row"><label>Panjang (Z):</label><input type="number" id="silinderP" value="25" min="2" max="50" onchange="updateBentuk()"></div>
+          <div class="param-row"><label>Diameter (D):</label><input type="number" id="silinderD" value="6" min="1" max="20" onchange="updateBentuk()"></div>
         </div>
       </div>
 
-      <!-- 2. Peralatan Pahat & Ukur -->
-      <div class="panel-section">
-        <div class="panel-title">2. Alat Bengkel</div>
-        <div class="tool-selector">
-          <button class="btn-tool active" onclick="pilihAlat('gergaji')">🪚 Gergaji</button>
-          <button class="btn-tool" onclick="pilihAlat('pahat')">🪛 Pahat</button>
-          <button class="btn-tool" onclick="pilihAlat('bor')">🔘 Bor</button>
-        </div>
-      </div>
-
-      <!-- 3. Parameter Pahat/Pemotongan -->
-      <div class="panel-section">
-        <div class="panel-title">3. Parameter Pahat</div>
-        <div class="input-group">
-          <div class="input-row">
-            <label>Kedalaman (Kedalam Grid):</label>
-            <input type="number" id="pahatDalam" value="2" min="1" max="10">
+      <!-- 2. Stock Alat -->
+      <div class="stock-section">
+        <div class="stock-title">🛠️ Stock Alat</div>
+        <div class="stock-grid">
+          <div class="stock-item active" id="item-gergaji" onclick="pilihAlat('gergaji')">
+            <div class="stock-icon">🪚</div>
+            <div class="stock-label">Gergaji</div>
           </div>
-          <div class="input-row">
-            <label>Sudut Potong (°):</label>
-            <input type="number" id="pahatSudut" value="90" step="15" min="0" max="180">
+          <div class="stock-item" id="item-pahat" onclick="pilihAlat('pahat')">
+            <div class="stock-icon">🪛</div>
+            <div class="stock-label">Pahat</div>
+          </div>
+          <div class="stock-item" id="item-bor" onclick="pilihAlat('bor')">
+            <div class="stock-icon">🔘</div>
+            <div class="stock-label">Bor</div>
           </div>
         </div>
       </div>
 
     </div>
 
-    <!-- Area Display 3D -->
-    <div id="viewport">
+    <!-- Area 3D Canvas / Drop Target -->
+    <div id="viewport" ondragover="allowDrop(event)" ondrop="handleDrop(event)">
       <div class="phase-bar">
         <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
         <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
