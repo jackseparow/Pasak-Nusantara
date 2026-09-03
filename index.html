@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geoblock - Pasak Nusantara 3D</title>
+  
+  <!-- CDN Google Blockly -->
+  <script src="https://unpkg.com/blockly/blockly_compressed.js"></script>
+  <script src="https://unpkg.com/blockly/blocks_compressed.js"></script>
+  <script src="https://unpkg.com/blockly/javascript_compressed.js"></script>
+  <script src="https://unpkg.com/blockly/msg/id.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #f4f6f9;
+    }
+    
+    /* Header & Banner Identitas */
+    header {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      z-index: 10;
+    }
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .logo-placeholder {
+      width: 42px;
+      height: 42px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #1e3c72;
+      font-size: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .title-group h1 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .title-group p {
+      font-size: 0.8rem;
+      opacity: 0.85;
+    }
+    
+    /* Main Layout */
+    .main-container {
+      display: flex;
+      flex: 1;
+      height: calc(100vh - 66px);
+    }
+    #blocklyDiv {
+      height: 100%;
+      width: 55%;
+    }
+    #previewContainer {
+      width: 45%;
+      height: 100%;
+      background-color: #1a1a24;
+      display: flex;
+      flex-direction: column;
+      border-left: 2px solid #ddd;
+    }
+    .preview-header {
+      background-color: #252533;
+      color: #fff;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #codeOutput {
+      flex: 1;
+      padding: 16px;
+      color: #a6e22e;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header & Banner Identitas -->
+  <header>
+    <div class="logo-container">
+      <div class="logo-placeholder">G</div>
+      <div class="title-group">
+        <h1>GEOBLOCK 3D: PASAK NUSANTARA</h1>
+        <p>Eksplorasi Geometri & Sambungan Kayu Tradisional</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Area Utama -->
+  <div class="main-container">
+    <div id="blocklyDiv"></div>
+    <div id="previewContainer">
+      <div class="preview-header">
+        <span>Pratinjau Kode OpenSCAD / CSG</span>
+      </div>
+      <pre id="codeOutput">// Kode 3D akan muncul di sini secara real-time</pre>
+    </div>
+  </div>
+
+  <!-- XML Toolbox -->
+  <xml id="toolbox" style="display: none">
+    <category name="Bentuk Kayu" colour="35">
+      <block type="balok_kayu">
+        <value name="PANJANG">
+          <shadow type="math_number"><field name="NUM">10</field></shadow>
+        </value>
+        <value name="LEBAR">
+          <shadow type="math_number"><field name="NUM">10</field></shadow>
+        </value>
+        <value name="TINGGI">
+          <shadow type="math_number"><field name="NUM">50</field></shadow>
+        </value>
+      </block>
+    </category>
+    <category name="Pasak & Pahat" colour="160">
+      <block type="gabung_purus"></block>
+      <block type="potong_lubang"></block>
+    </category>
+    <category name="Angka" colour="230">
+      <block type="math_number"></block>
+    </category>
+  </xml>
+
+  <!-- Skrip JavaScript (Dipanggil berurutan) -->
+  <script src="js/blocks.js"></script>
+  <script src="js/generators.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
