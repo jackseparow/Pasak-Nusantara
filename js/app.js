@@ -1,6 +1,5 @@
 let scene, camera, renderer, controls;
-let transformControl;
-let activeGizmoMode = 'translate';
+let transformControlsTranslate, transformControlsRotate;
 
 let bendaKerjaList = [];
 let selectedObjIndex = -1;
@@ -36,22 +35,33 @@ function initThreeJS() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  transformControl = new THREE.TransformControls(camera, renderer.domElement);
-  transformControl.size = 0.85;
-  scene.add(transformControl);
+  // 1. TransformControls Mode Geser (Panah)
+  transformControlsTranslate = new THREE.TransformControls(camera, renderer.domElement);
+  transformControlsTranslate.setMode('translate');
+  transformControlsTranslate.size = 0.75;
+  scene.add(transformControlsTranslate);
 
-  // Event saat gizmo di-drag
-  transformControl.addEventListener('dragging-changed', (event) => {
+  // 2. TransformControls Mode Putar (Ring Lingkaran)
+  transformControlsRotate = new THREE.TransformControls(camera, renderer.domElement);
+  transformControlsRotate.setMode('rotate');
+  transformControlsRotate.size = 0.85; // Sedikit lebih besar melingkupi panah
+  scene.add(transformControlsRotate);
+
+  // Nonaktifkan OrbitControls saat objek diputar/digeser lewat gizmo
+  const disableOrbit = (event) => {
     controls.enabled = !event.value;
     const tooltip = document.getElementById('rotationTooltip');
-    if (activeGizmoMode === 'rotate' && event.value) {
+    if (event.value) {
       tooltip.style.display = 'block';
     } else {
       tooltip.style.display = 'none';
     }
-  });
+  };
 
-  transformControl.addEventListener('change', syncRotationToUI);
+  transformControlsTranslate.addEventListener('dragging-changed', disableOrbit);
+  transformControlsRotate.addEventListener('dragging-changed', disableOrbit);
+
+  transformControlsRotate.addEventListener('change', syncRotationToUI);
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -73,43 +83,30 @@ function initThreeJS() {
   animate();
 }
 
-/* --- MANAJEMEN MODE GIZMO AKTIF --- */
-function setGizmoActiveMode(mode) {
-  activeGizmoMode = mode;
-
-  document.getElementById('btnToggleTranslate').classList.toggle('active', mode === 'translate');
-  document.getElementById('btnToggleRotate').classList.toggle('active', mode === 'rotate');
-  document.getElementById('btnToggleOff').classList.toggle('active', mode === 'off');
-
-  if (mode === 'off') {
-    transformControl.detach();
-    transformControl.visible = false;
-  } else {
-    transformControl.setMode(mode);
-    refreshGizmoTarget();
-  }
-}
-
+/* --- ATTACH GIZMO MELAYANG BERSAMAAN (GESER & ROTASI) --- */
 function refreshGizmoTarget() {
-  if (activeGizmoMode === 'off') {
-    transformControl.detach();
-    transformControl.visible = false;
-    return;
-  }
+  let targetObj = null;
 
   if (activeAlat && toolGroup) {
-    transformControl.attach(toolGroup);
-    transformControl.visible = true;
+    targetObj = toolGroup;
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
-    transformControl.attach(bendaKerjaList[selectedObjIndex].group);
-    transformControl.visible = true;
+    targetObj = bendaKerjaList[selectedObjIndex].group;
+  }
+
+  if (targetObj) {
+    transformControlsTranslate.attach(targetObj);
+    transformControlsRotate.attach(targetObj);
+    transformControlsTranslate.visible = true;
+    transformControlsRotate.visible = true;
   } else {
-    transformControl.detach();
-    transformControl.visible = false;
+    transformControlsTranslate.detach();
+    transformControlsRotate.detach();
+    transformControlsTranslate.visible = false;
+    transformControlsRotate.visible = false;
   }
 }
 
-/* --- SINKRONISASI ROTASI DENGAN MOUSE & INPUT TEKS --- */
+/* --- SINKRONISASI ROTASI DENGAN UI --- */
 function syncRotationToUI() {
   let targetObj = null;
   if (activeAlat && toolGroup) {
@@ -158,11 +155,16 @@ function toggleAlat(alat) {
   document.getElementById('item-bor').classList.toggle('active', activeAlat === 'bor');
 
   const toolPanel = document.getElementById('toolOverlayPanel');
+  const drillRow = document.getElementById('rowDrillDiameter');
+
   if (activeAlat && activeFase === 'pahat') {
     const names = { gergaji: 'Gergaji', pahat: 'Pahat', bor: 'Bor' };
     const icons = { gergaji: '🪚', pahat: '🪛', bor: '🔘' };
     document.getElementById('toolOverlayIcon').innerText = icons[activeAlat];
     document.getElementById('toolOverlayName').innerText = `Kontrol ${names[activeAlat]}`;
+    
+    // Tampilkan opsi diameter jika alat = Bor
+    drillRow.style.display = (activeAlat === 'bor') ? 'flex' : 'none';
     toolPanel.style.display = 'block';
 
     create3DTool();
@@ -174,6 +176,7 @@ function toggleAlat(alat) {
   }
 }
 
+/* --- MEMBUAT ALAT 3D + DUKUNGAN DIAMETER BOR --- */
 function create3DTool() {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -208,11 +211,14 @@ function create3DTool() {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
-    bladeGeo = new THREE.CylinderGeometry(1, 1, 10, 16);
+    const drillDiameter = parseFloat(document.getElementById('toolDrillDiameter').value) || 2;
+    const radius = drillDiameter / 2;
+
+    bladeGeo = new THREE.CylinderGeometry(radius, radius, 10, 24);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     cutterGeometryMesh = new THREE.Mesh(bladeGeo, drillMat);
 
-    const headGeo = new THREE.BoxGeometry(2, 3, 2);
+    const headGeo = new THREE.BoxGeometry(Math.max(2, drillDiameter + 0.5), 3, Math.max(2, drillDiameter + 0.5));
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.set(0, 6, 0);
@@ -234,13 +240,18 @@ function create3DTool() {
 
 function updateAlatTransform() {
   if (!toolGroup) return;
-  const depth = parseFloat(document.getElementById('toolDepth').value) || 4;
-  toolGroup.scale.set(1, depth / 4, 1);
+
+  if (activeAlat === 'bor') {
+    create3DTool(); // Re-create geometri jika diameter bor diubah
+  }
+
+  const depth = parseFloat(document.getElementById('toolDepth').value) || 6;
+  toolGroup.scale.set(1, depth / 6, 1);
 }
 
 /* --- INTERAKSI SELEKSI --- */
 function onViewportClick(event) {
-  if (event.target.tagName !== 'CANVAS' || transformControl.dragging) return;
+  if (event.target.tagName !== 'CANVAS' || transformControlsTranslate.dragging || transformControlsRotate.dragging) return;
 
   const container = document.getElementById('viewport');
   const rect = container.getBoundingClientRect();
@@ -430,7 +441,7 @@ function trianglesShareVertex(t1, t2, threshold = 0.0001) {
   return false;
 }
 
-/* --- REBUILD OVERLAYS DENGAN STRIMIN STRUKTURAL UTUH --- */
+/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT POTONGAN --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -440,7 +451,6 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // 1. Mesh Strimin Overlay Wireframe Biru
   const striminMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -450,12 +460,10 @@ function rebuildOverlays(item) {
   const striminMesh = new THREE.Mesh(item.mainMesh.geometry, striminMat);
   item.group.add(striminMesh);
 
-  // 2. Edges Outlines Garis Tegas
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
 
-  // 3. Highlight Bekas Potongan Oranye Terang
   if (item.hasBeenCut) {
     const cutEdgesMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
     const cutHighlight = new THREE.LineSegments(edgesGeometry, cutEdgesMat);
