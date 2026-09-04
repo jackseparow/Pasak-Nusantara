@@ -482,24 +482,23 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA FISIK (IF-THEN PENGECEKAN KEDALAMAN UTAMANYA) --- */
+/* --- HASIL RONGGA FISIK BERLUBANG TEMBUS (100% PASTI MUNCUL) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // 1. HITUNG HITUNGAN DIMENSI MAKSIMAL BAHAN PADA ARAH POTONGAN
+  // 1. HITUNG HITUNGAN DIMENSI MAKSIMAL TEBAL BAHAN
   let maxThickness = 30;
   if (targetObj.jenis === 'balok') {
-    // Tentukan tebal maksimal berdasarkan normal bidang potong
     const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
     if (localNormal.y > 0.5) maxThickness = targetObj.t;
     else if (localNormal.x > 0.5) maxThickness = targetObj.p;
     else maxThickness = targetObj.l;
   } else {
-    maxThickness = targetObj.t; // Diameter silinder
+    maxThickness = targetObj.t;
   }
 
-  // 2. PENGECEKAN IF-THEN: LUBANG TIDAK BOLEH MENONJOL MELEBIHI BAHAN
+  // 2. PENGECEKAN IF-THEN: HANYA MELUKAI MAKSIMAL SEUKURAN BAHAN (TIDAK BOLEH MENONJOL)
   let effectiveDepth = valDepthInput;
   let isThruHole = false;
 
@@ -513,6 +512,7 @@ function prosesCutterVisualResult(targetObj) {
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
+    // Jika tembus, hapus permukaan penutup atas & bawah (openEnded = isThruHole)
     holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32, 1, isThruHole);
     holeGeo.translate(0, -effectiveDepth / 2, 0);
 
@@ -533,19 +533,16 @@ function prosesCutterVisualResult(targetObj) {
     holeGeo.translate(0, -effectiveDepth / 2, 0);
   }
 
-  // Material Dinding Dalam Lubang (Warna Serat Dalam Kayu)
+  // MATERIAL PERBAIKAN DENGAN POLYGON OFFSET: PASTI KELIHATAN & HANYA DIDALAM KAYU
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x241103, // Cokelat tua serat dalam kayu
+    color: 0x1a0a02, // Cokelat tua berlubang
     roughness: 0.9,
     metalness: 0.0,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2
   });
-
-  // Jika tembus penuh, buat penutup bawah transparan agar tembus pandang
-  if (isThruHole) {
-    innerWoodMat.transparent = true;
-    innerWoodMat.opacity = 0.95;
-  }
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   cutMesh.position.copy(localHitPos);
@@ -556,7 +553,7 @@ function prosesCutterVisualResult(targetObj) {
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Outline Garis Oranye Penegas Rongga Fisik
+  // OUTLINE PENAGAS LUBANG BERLUBANG
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
   const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
