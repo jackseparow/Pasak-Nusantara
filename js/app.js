@@ -35,19 +35,16 @@ function initThreeJS() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  // 1. TransformControls Mode Geser (Panah)
   transformControlsTranslate = new THREE.TransformControls(camera, renderer.domElement);
   transformControlsTranslate.setMode('translate');
   transformControlsTranslate.size = 0.75;
   scene.add(transformControlsTranslate);
 
-  // 2. TransformControls Mode Putar (Ring Lingkaran)
   transformControlsRotate = new THREE.TransformControls(camera, renderer.domElement);
   transformControlsRotate.setMode('rotate');
-  transformControlsRotate.size = 0.85; // Sedikit lebih besar melingkupi panah
+  transformControlsRotate.size = 0.85;
   scene.add(transformControlsRotate);
 
-  // Nonaktifkan OrbitControls saat objek diputar/digeser lewat gizmo
   const disableOrbit = (event) => {
     controls.enabled = !event.value;
     const tooltip = document.getElementById('rotationTooltip');
@@ -83,7 +80,7 @@ function initThreeJS() {
   animate();
 }
 
-/* --- ATTACH GIZMO MELAYANG BERSAMAAN (GESER & ROTASI) --- */
+/* --- REFRESH TARGET GIZMO PERGESERAN & ROTASI --- */
 function refreshGizmoTarget() {
   let targetObj = null;
 
@@ -163,7 +160,6 @@ function toggleAlat(alat) {
     document.getElementById('toolOverlayIcon').innerText = icons[activeAlat];
     document.getElementById('toolOverlayName').innerText = `Kontrol ${names[activeAlat]}`;
     
-    // Tampilkan opsi diameter jika alat = Bor
     drillRow.style.display = (activeAlat === 'bor') ? 'flex' : 'none';
     toolPanel.style.display = 'block';
 
@@ -176,7 +172,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MEMBUAT ALAT 3D + DUKUNGAN DIAMETER BOR --- */
+/* --- MEMBUAT ALAT 3D --- */
 function create3DTool() {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -242,7 +238,7 @@ function updateAlatTransform() {
   if (!toolGroup) return;
 
   if (activeAlat === 'bor') {
-    create3DTool(); // Re-create geometri jika diameter bor diubah
+    create3DTool();
   }
 
   const depth = parseFloat(document.getElementById('toolDepth').value) || 6;
@@ -282,7 +278,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- OPERASI PEMOTONGAN CSG NYATA --- */
+/* --- OPERASI PEMOTONGAN CSG --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -441,7 +437,7 @@ function trianglesShareVertex(t1, t2, threshold = 0.0001) {
   return false;
 }
 
-/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT POTONGAN --- */
+/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -487,9 +483,9 @@ function tambahBendaKerja() {
     id: Date.now(),
     nama: isBalok ? `Kayu Balok #${index}` : `Pasak Silinder #${index}`,
     jenis: jenisBahanBaru,
-    p: isBalok ? 10 : 25,
+    p: isBalok ? 10 : 25, // p digunakan sebagai Tinggi (H) jika Silinder
     l: 10,
-    t: isBalok ? 30 : 4,
+    t: isBalok ? 30 : 6,  // t digunakan sebagai Diameter (D) jika Silinder
     opacity: 1.0,
     group: new THREE.Group(),
     mainMesh: null,
@@ -519,15 +515,32 @@ function hapusBendaKerja(index, event) {
   }
 }
 
+/* --- SELEKSI BENDA KERJA & PENYESUAIAN PANEL KHUSUS SILINDER --- */
 function pilihBendaKerja(index) {
   selectedObjIndex = index;
   const controlsDiv = document.getElementById('selectedObjectControls');
 
+  const groupBalok = document.getElementById('groupBalokDim');
+  const groupSilinder = document.getElementById('groupSilinderDim');
+
   if (selectedObjIndex >= 0 && selectedObjIndex < bendaKerjaList.length) {
     const item = bendaKerjaList[selectedObjIndex];
-    document.getElementById('objP').value = item.p;
-    document.getElementById('objL').value = item.l;
-    document.getElementById('objT').value = item.t;
+
+    if (item.jenis === 'balok') {
+      groupBalok.style.display = 'flex';
+      groupSilinder.style.display = 'none';
+
+      document.getElementById('objP').value = item.p;
+      document.getElementById('objL').value = item.l;
+      document.getElementById('objT').value = item.t;
+    } else {
+      groupBalok.style.display = 'none';
+      groupSilinder.style.display = 'flex';
+
+      document.getElementById('objDiameter').value = item.t;        // Diameter (D)
+      document.getElementById('objTinggiSilinder').value = item.p;   // Tinggi (H)
+    }
+
     document.getElementById('objOpacity').value = item.opacity;
     document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
 
@@ -568,11 +581,16 @@ function updateObjekTerpilih() {
   if (selectedObjIndex < 0) return;
   const item = bendaKerjaList[selectedObjIndex];
 
-  item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objP').value) || 10));
-  item.l = Math.max(1, Math.round(parseFloat(document.getElementById('objL').value) || 10));
-  item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objT').value) || 30));
-  item.opacity = parseFloat(document.getElementById('objOpacity').value);
+  if (item.jenis === 'balok') {
+    item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objP').value) || 10));
+    item.l = Math.max(1, Math.round(parseFloat(document.getElementById('objL').value) || 10));
+    item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objT').value) || 30));
+  } else {
+    item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objDiameter').value) || 6));        // Diameter (D)
+    item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objTinggiSilinder').value) || 25)); // Tinggi (H)
+  }
 
+  item.opacity = parseFloat(document.getElementById('objOpacity').value);
   document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
 
   updateObjekMesh(item);
@@ -604,9 +622,9 @@ function updateObjekMesh(item) {
     height = item.t;
     geometry = new THREE.BoxGeometry(item.p, item.t, item.l, item.p, item.t, item.l);
   } else {
-    height = item.p;
-    const radius = item.t / 2;
-    geometry = new THREE.CylinderGeometry(radius, radius, item.p, 16, item.p);
+    height = item.p; // Tinggi Silinder
+    const radius = item.t / 2; // Diameter / 2
+    geometry = new THREE.CylinderGeometry(radius, radius, item.p, 24, item.p);
   }
 
   item.mainMesh = new THREE.Mesh(geometry, material);
