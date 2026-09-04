@@ -257,14 +257,14 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik permukaan kayu untuk menempelkan ujung mata pahat persegi <strong>(2d × 2d)</strong>.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik permukaan kayu untuk menempatkan pahat persegi <strong>(2d × 2d)</strong>.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Lancip:</strong> Klik permukaan kayu untuk menempelkan ujung kerucut bor <strong>(Diameter D)</strong>.";
+      hintText.innerHTML = "🔘 <strong>Bor Lancip:</strong> Klik permukaan kayu untuk menempatkan mata bor <strong>(Diameter D)</strong>.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
-      hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempelkan garis mata gergaji.";
+      hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan gergaji.";
     }
 
     toolPanel.style.display = 'block';
@@ -294,7 +294,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
     
     cutterGeometryMesh = new THREE.Mesh(chiselGeo, chiselMat);
-    // Geser geometry agar ujung bawah berada di pivot (0, 0, 0)
     cutterGeometryMesh.position.set(0, -valDepth / 2, 0);
 
     const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 4, 12);
@@ -311,7 +310,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     
     cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
-    // Geser geometry agar garis mata bawah menempel tepat di pivot
     cutterGeometryMesh.position.set(0, -valDepth / 2, 0);
 
     const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 4);
@@ -326,18 +324,15 @@ function create3DTool(positionPoint = null, normalVector = null) {
     // Bor Lancip: Pivot di ujung paling bawah kerucut lancip (0, 0, 0)
     const radius = valDiameter / 2;
     
-    // Mata bor silinder utama
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     cutterGeometryMesh = new THREE.Mesh(drillGeo, drillMat);
     cutterGeometryMesh.position.set(0, -valDepth / 2 - 1.5, 0);
 
-    // Ujung lancip kerucut bor
     const tipGeo = new THREE.ConeGeometry(radius, 1.5, 32);
     const tipMesh = new THREE.Mesh(tipGeo, drillMat);
-    // Posisikan ujung lancip kerucut berada di titik Y = 0 (pivot point)
     tipMesh.position.set(0, -0.75, 0);
-    tipMesh.rotation.x = Math.PI; // Kerucut menghadap ke bawah
+    tipMesh.rotation.x = Math.PI;
 
     const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
@@ -351,7 +346,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
-    // Arahkan sumbu Y negatif alat searah dengan vektor normal permukaan kayu
     const up = new THREE.Vector3(0, -1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
@@ -474,10 +468,10 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMBUATAN LUBANG FISIK CSG GARANSI BERHASIL --- */
+/* --- PEMBUATAN LUBANG FISIK CSG DENGAN OVERLAP OFFSET --- */
 function prosesCSGCutting(targetObj) {
   try {
-    targetObj.mainMesh.updateMatrixWorld();
+    targetObj.mainMesh.updateMatrixWorld(true);
 
     const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
     const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
@@ -494,16 +488,15 @@ function prosesCSGCutting(targetObj) {
     }
 
     const cutterMesh = new THREE.Mesh(cutterGeo, new THREE.MeshBasicMaterial());
-    
-    // Posisikan pemotong terbenam masuk ke dalam kayu
+
+    // Posisikan pemotong terbenam masuk ke dalam kayu (Auto Overlap Offset)
     cutterMesh.position.copy(toolGroup.position);
     cutterMesh.quaternion.copy(toolGroup.quaternion);
 
-    // Geser posisi pusat cutter terbenam ke dalam bahan kayu sedalam (valDepth/2)
     const pushInVec = new THREE.Vector3(0, -valDepth / 2, 0).applyQuaternion(toolGroup.quaternion);
     cutterMesh.position.add(pushInVec);
 
-    // Transformasi lokal ke parent group kayu
+    // Transformasi posisi lokal ke parent group benda kerja
     targetObj.group.worldToLocal(cutterMesh.position);
     cutterMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
     cutterMesh.updateMatrix();
