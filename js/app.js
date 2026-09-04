@@ -480,26 +480,46 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA FISIK DASAR --- */
+/* --- HASIL RONGGA FISIK BERLUBANG (PEMBATASAN IF-THEN DENGAN TEBAL BAHAN) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
-  const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
+  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
+
+  // 1. PENGECEKAN KETEBALAN FISIK BAHAN (MAX THICKNESS)
+  let maxThickness = 30;
+  if (targetObj.jenis === 'balok') {
+    const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
+    if (localNormal.y > 0.5) maxThickness = targetObj.t;
+    else if (localNormal.x > 0.5) maxThickness = targetObj.p;
+    else maxThickness = targetObj.l;
+  } else {
+    maxThickness = targetObj.t; // Diameter silinder
+  }
+
+  // 2. LOGIKA IF-THEN: KEDALAMAN TIDAK BOLEH MENONJOL KELUAR BAHAN
+  let effectiveDepth = valDepthInput;
+  let isThruHole = false;
+
+  if (valDepthInput >= maxThickness) {
+    effectiveDepth = maxThickness;
+    isThruHole = true; // Lubang tembus penuh
+  }
 
   const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
-
   let holeGeo;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    // openEnded = isThruHole (jika tembus, tutup silinder dibuka agar tembus pandang)
+    holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32, 1, isThruHole);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
-    holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
-  } else {
+  } else { // gergaji
     let targetSpan = 12;
     if (targetObj.jenis === 'balok') {
       targetSpan = targetObj.l * 1.02;
@@ -507,14 +527,19 @@ function prosesCutterVisualResult(targetObj) {
       targetSpan = targetObj.t * 1.02;
     }
 
-    holeGeo = new THREE.BoxGeometry(0.5, valDepth, targetSpan);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
   }
 
+  // Material Serat Dalam Kayu
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x3d2008,
-    roughness: 0.8,
-    metalness: 0.1
+    color: 0x241103, // Cokelat kayu bagian dalam
+    roughness: 0.9,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
   });
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
@@ -526,8 +551,9 @@ function prosesCutterVisualResult(targetObj) {
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
+  // Outline Garis Oranye Penegas Rongga Lubang
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
-  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
+  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
   cutMesh.add(cutLineSegments);
 
