@@ -30,29 +30,29 @@ function initThreeJS() {
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
-  // Orbit Controls (Rotasi Kamera)
+  // Orbit Controls (Navigasi Kamera Utama)
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  // 1. TransformControls Mode Geser (Panah)
+  // 1. Indikator Panah Pergeseran 3D di Titik Pusat
   transformControlsTranslate = new THREE.TransformControls(camera, renderer.domElement);
   transformControlsTranslate.setMode('translate');
   transformControlsTranslate.size = 0.75;
   scene.add(transformControlsTranslate);
 
-  // 2. TransformControls Mode Putar (Lingkaran Sudut)
+  // 2. Indikator Ring Perputaran Sudut 3D di Titik Pusat yang Sama
   transformControlsRotate = new THREE.TransformControls(camera, renderer.domElement);
   transformControlsRotate.setMode('rotate');
-  transformControlsRotate.size = 0.75;
+  transformControlsRotate.size = 0.85; // Ukuran sedikit lebih besar agar melingkupi panah pergeseran
   scene.add(transformControlsRotate);
 
-  // Nonaktifkan OrbitControls saat objek sedang diputar/digeser lewat mouse
+  // Matikan OrbitControls saat pengguna menggeser atau memutar objek dengan mouse
   const disableOrbit = (event) => { controls.enabled = !event.value; };
   transformControlsTranslate.addEventListener('dragging-changed', disableOrbit);
   transformControlsRotate.addEventListener('dragging-changed', disableOrbit);
 
-  // Sinkronisasi nilai sudut rotasi ke input teks saat diputar dengan mouse
+  // Update nilai sudut di UI secara real-time saat ring rotasi diputar
   transformControlsRotate.addEventListener('change', syncRotationToUI);
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -75,7 +75,7 @@ function initThreeJS() {
   animate();
 }
 
-/* --- ATTACH GIZMO BERSAMAAN (GESER & PUTAR) --- */
+/* --- MENAMPILKAN VISUAL PERGESERAN & PERPUTARAN SECARA BERSAMAAN --- */
 function attachGizmos(targetObject) {
   if (targetObject) {
     transformControlsTranslate.attach(targetObject);
