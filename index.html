@@ -37,7 +37,7 @@
     .main-container { display: flex; flex: 1; height: calc(100vh - 58px); }
     
     #stock-panel {
-      width: 320px;
+      width: 300px;
       background-color: #1e1e28;
       padding: 16px;
       display: flex;
@@ -62,9 +62,6 @@
       margin-bottom: 10px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
     }
 
     .stock-grid {
@@ -93,7 +90,7 @@
     .stock-label { font-size: 0.75rem; font-weight: 600; color: #ddd; text-align: center; }
 
     .param-group {
-      margin-top: 10px;
+      margin-top: 8px;
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -107,7 +104,7 @@
     }
 
     .param-row input[type="number"] {
-      width: 60px;
+      width: 55px;
       padding: 3px;
       border-radius: 4px;
       border: 1px solid #4a4a60;
@@ -118,12 +115,11 @@
 
     .param-row input[type="range"] { flex: 1; margin-left: 8px; }
 
-    /* Daftar Benda Kerja */
     .object-list {
       display: flex;
       flex-direction: column;
       gap: 6px;
-      max-height: 140px;
+      max-height: 120px;
       overflow-y: auto;
       margin-top: 8px;
     }
@@ -155,8 +151,8 @@
       margin-top: 8px;
       font-size: 0.78rem;
     }
-    .btn-add:hover { background: #3b63a9; }
 
+    /* Viewport Area & Floating Tool Controls */
     #viewport { flex: 1; position: relative; background-color: #0d0d12; }
 
     .phase-bar {
@@ -186,6 +182,46 @@
     }
 
     .btn-phase.active { background: #2a5298; color: #fff; }
+
+    /* Panel Floating Alat di Dalam Viewport */
+    .tool-overlay-panel {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 220px;
+      background: rgba(25, 25, 35, 0.9);
+      border: 1px solid #4a82e8;
+      border-radius: 8px;
+      padding: 12px;
+      backdrop-filter: blur(6px);
+      z-index: 5;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+
+    .tool-overlay-title {
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: #4a82e8;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-cut {
+      width: 100%;
+      padding: 8px;
+      background: #d9534f;
+      border: none;
+      color: #fff;
+      font-weight: bold;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 10px;
+      font-size: 0.8rem;
+      transition: background 0.2s;
+    }
+    .btn-cut:hover { background: #c9302c; }
 
     .hint-box {
       font-size: 0.72rem;
@@ -237,16 +273,14 @@
         <div id="selectedObjectControls" style="margin-top: 12px; border-top: 1px solid #333346; padding-top: 8px;">
           <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-bottom: 6px;">Atur Benda Kerja Terpilih</div>
           
-          <div id="formBalokParams" class="param-group">
+          <div class="param-group">
             <div class="param-row"><label>Panjang (X):</label><input type="number" id="objP" value="10" min="1" oninput="updateObjekTerpilih()"></div>
             <div class="param-row"><label>Lebar (Z):</label><input type="number" id="objL" value="10" min="1" oninput="updateObjekTerpilih()"></div>
             <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="objT" value="30" min="1" oninput="updateObjekTerpilih()"></div>
           </div>
 
           <div class="param-group">
-            <div class="param-row">
-              <label>Transparansi (X-Ray):</label>
-            </div>
+            <div class="param-row"><label>Transparansi (X-Ray):</label></div>
             <div class="param-row">
               <input type="range" id="objOpacity" min="0.1" max="1" step="0.05" value="1" oninput="updateObjekTerpilih()">
               <span id="opacityVal" style="font-size: 0.7rem; width: 30px; text-align: right;">100%</span>
@@ -255,9 +289,9 @@
         </div>
       </div>
 
-      <!-- Panel Alat & Presisi -->
+      <!-- Panel Alat Kerja -->
       <div class="stock-section">
-        <div class="stock-title">🛠️ Kontrol Alat Kerja</div>
+        <div class="stock-title">🛠️ Pilih Alat Pemahat</div>
         <div class="stock-grid">
           <div class="stock-item active" id="item-gergaji" onclick="pilihAlat('gergaji')">
             <div class="stock-icon">🪚</div>
@@ -272,27 +306,51 @@
             <div class="stock-label">Bor</div>
           </div>
         </div>
-
-        <!-- Parameter Sudut & Kedalaman Alat -->
-        <div class="param-group" style="margin-top: 10px;">
-          <div class="param-row"><label>Sudut Potong X (°):</label><input type="number" id="toolRotX" value="0" min="-180" max="180" oninput="updateAlatPreview()"></div>
-          <div class="param-row"><label>Sudut Potong Y (°):</label><input type="number" id="toolRotY" value="0" min="-180" max="180" oninput="updateAlatPreview()"></div>
-          <div class="param-row"><label>Kedalaman (Unit):</label><input type="number" id="toolDepth" value="5" min="1" max="50" oninput="updateAlatPreview()"></div>
-        </div>
       </div>
 
       <div class="hint-box">
-        💡 <strong>Mode Transparansi:</strong> Kurangi transparansi pada panel atas untuk mengamati persimpangan sambungan pasak secara langsung.
+        🎯 <strong>Arahkan & Klik Strimin:</strong> Sorot kursor ke permukaan kayu untuk menempelkan alat pada grid unit, lalu klik untuk mengunci koordinat.
       </div>
 
     </div>
 
     <div id="viewport">
+      <!-- Fase Top Bar -->
       <div class="phase-bar">
         <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
         <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
         <button id="faseUji" class="btn-phase" onclick="setFase('uji')">3. Uji Gempa</button>
       </div>
+
+      <!-- Panel Floating Parameter Alat -->
+      <div class="tool-overlay-panel">
+        <div class="tool-overlay-title">
+          <span id="toolOverlayIcon">🪚</span>
+          <span id="toolOverlayName">Kontrol Gergaji</span>
+        </div>
+
+        <div class="param-group">
+          <div class="param-row">
+            <label>Sudut X (°):</label>
+            <input type="number" id="toolRotX" value="0" min="-180" max="180" oninput="updateAlatTransform()">
+          </div>
+          <div class="param-row">
+            <label>Sudut Y (°):</label>
+            <input type="number" id="toolRotY" value="0" min="-180" max="180" oninput="updateAlatTransform()">
+          </div>
+          <div class="param-row">
+            <label>Kedalaman:</label>
+            <input type="number" id="toolDepth" value="4" min="1" max="20" oninput="updateAlatTransform()">
+          </div>
+        </div>
+
+        <div style="font-size: 0.7rem; color: #888; margin-top: 6px;" id="targetCoordLabel">
+          Target: (0, 0, 0)
+        </div>
+
+        <button class="btn-cut" onclick="eksekusiPemotongan()">⚡ Eksekusi Pemotongan</button>
+      </div>
+
     </div>
   </div>
 
