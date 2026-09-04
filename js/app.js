@@ -1,6 +1,6 @@
 let scene, camera, renderer, controls;
 let transformControl;
-let activeGizmoMode = 'translate'; // 'translate', 'rotate', atau 'off'
+let activeGizmoMode = 'translate';
 
 let bendaKerjaList = [];
 let selectedObjIndex = -1;
@@ -70,6 +70,25 @@ function initThreeJS() {
   window.addEventListener('resize', onWindowResize);
 
   animate();
+}
+
+/* --- BERSIHKAN AREA KERJA / RESET VIEWER --- */
+function bersihkanAreaKerja() {
+  if (bendaKerjaList.length === 0) return;
+
+  if (confirm("Apakah Anda yakin ingin mengosongkan area kerja? Semua benda kerja akan dihapus.")) {
+    bendaKerjaList.forEach(item => scene.remove(item.group));
+    bendaKerjaList = [];
+    selectedObjIndex = -1;
+
+    if (toolGroup) {
+      scene.remove(toolGroup);
+      toolGroup = null;
+    }
+    
+    toggleAlat(null);
+    pilihBendaKerja(-1);
+  }
 }
 
 /* --- TOMBOL SAKLAR GIZMO --- */
@@ -150,7 +169,7 @@ function updateObjekRotasiManual() {
 
 /* --- MANAJEMEN ALAT KERJA --- */
 function toggleAlat(alat) {
-  if (activeAlat === alat) {
+  if (activeAlat === alat || alat === null) {
     activeAlat = null;
   } else {
     activeAlat = alat;
@@ -174,14 +193,14 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Persegi:</strong> Klik titik pada kayu. Pahat akan membuat lubang persegi <strong>(2d × 2d)</strong> dari titik pusat tersebut.";
+      hintText.innerHTML = "🪛 <strong>Pahat Persegi:</strong> Klik permukaan kayu untuk membuat jejak lubang persegi <strong>(2d × 2d)</strong> sedalam nilai kedalaman.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Klik titik pada permukaan kayu untuk menempatkan titik pusat bor.";
+      hintText.innerHTML = "🔘 <strong>Bor Lingkaran:</strong> Klik permukaan kayu untuk membuat jejak lubang lingkaran <strong>(Diameter D)</strong> sedalam nilai kedalaman.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
-      hintText.innerHTML = "🪚 <strong>Gergaji Potong Penuh:</strong> Klik garis/permukaan pada kayu untuk memotong melintasi seluruh penampang.";
+      hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk memotong celah garis lurus sedalam nilai kedalaman.";
     }
 
     toolPanel.style.display = 'block';
@@ -205,6 +224,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
   if (activeAlat === 'pahat') {
+    // Pahat: Jejak Lubang Persegi (2d x 2d)
     const sideSize = valDiameter * 2;
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
@@ -219,6 +239,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
+    // Gergaji: Irisan Garis
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
@@ -232,8 +253,9 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
+    // Bor: Jejak Lubang Lingkaran (Diameter D)
     const radius = valDiameter / 2;
-    const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 24);
+    const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     cutterGeometryMesh = new THREE.Mesh(drillGeo, drillMat);
 
@@ -274,7 +296,7 @@ function updateAlatTransform() {
   }
 }
 
-/* --- INTERAKSI KLIK POINT SELECTION --- */
+/* --- INTERAKSI KLIK SELEKSI & PENEMPATAN ALAT --- */
 function onViewportClick(event) {
   if (event.target.tagName !== 'CANVAS' || transformControl.dragging) return;
 
@@ -314,7 +336,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- EKSEKUSI PEMOTONGAN CSG & VISUAL JEJAK --- */
+/* --- EKSEKUSI PEMOTONGAN CSG & PENAMPILAN JEJAK VISUAL --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -473,7 +495,7 @@ function trianglesShareVertex(t1, t2, threshold = 0.0001) {
   return false;
 }
 
-/* --- REBUILD OVERLAYS STRIMIN & JEJAK POTONGAN (ORANGE HIGHLIGHT) --- */
+/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT JEJAK BEKAS ALAT --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -498,11 +520,11 @@ function rebuildOverlays(item) {
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
 
-  // 3. Visual Jejak Benda Terkena Alat (Tebal & Oranye Terang)
+  // 3. Visual Jejak Benda Terkena Alat (Garis Batas Rongga Oranye Terang)
   if (item.hasBeenCut) {
     const cutEdgesMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
     const cutHighlight = new THREE.LineSegments(edgesGeometry, cutEdgesMat);
-    cutHighlight.scale.set(1.002, 1.002, 1.002); // Timbul sedikit agar kontras
+    cutHighlight.scale.set(1.002, 1.002, 1.002);
     item.group.add(cutHighlight);
   }
 }
