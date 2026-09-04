@@ -280,7 +280,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D (MATA ALAT TEPAT MENEMPEL PADA TITIK KLIK) --- */
+/* --- MODEL ALAT 3D: KOORDINAT (0,0,0) TEPAT DI MATA/UJUNG ALAT --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -293,19 +293,20 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const radius = valDiameter / 2;
     const tipHeight = 1.2;
 
-    // Kerucut Ujung Mata Bor Lancip (Titik Puncak berada tepat di (0,0,0))
+    // Ujung Kerucut Bor (Titik Ujung Lancip persis di Y = 0)
     const tipGeo = new THREE.ConeGeometry(radius, tipHeight, 32);
-    tipGeo.rotateX(Math.PI); 
+    tipGeo.rotateX(Math.PI);
     tipGeo.translate(0, tipHeight / 2, 0);
 
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     const tipMesh = new THREE.Mesh(tipGeo, drillMat);
 
-    // Batang Silinder Bor
+    // Batang Silinder Bor (Dimulai dari atas Kerucut ke arah Y positif)
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     drillGeo.translate(0, tipHeight + (valDepth / 2), 0);
     const mainDrill = new THREE.Mesh(drillGeo, drillMat);
 
+    // Kepala Mesin Bor
     const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
     headGeo.translate(0, tipHeight + valDepth + 1.5, 0);
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
@@ -316,7 +317,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(head);
 
   } else if (activeAlat === 'pahat') {
-    // Mata Pahat Pipih (Bawah Pahat Tepat di titik (0,0,0))
+    // Mata Pahat Pipih (Sisi Bawah Pahat persis di Y = 0)
     const sideSize = valDiameter * 2;
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     chiselGeo.translate(0, valDepth / 2, 0);
@@ -324,6 +325,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
     const mainChisel = new THREE.Mesh(chiselGeo, chiselMat);
 
+    // Gagang Kayu Pahat
     const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 4, 12);
     handleGeo.translate(0, valDepth + 2, 0);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
@@ -333,13 +335,14 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
-    // Bilah Gergaji (Bawah Bilah Tepat di titik (0,0,0))
+    // Bilah Gergaji (Sisi Bawah Bilah persis di Y = 0)
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
     bladeGeo.translate(0, valDepth / 2, 0);
 
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     const mainBlade = new THREE.Mesh(bladeGeo, bladeMat);
 
+    // Pegangan Gergaji
     const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 4);
     handleGeo.translate(0, valDepth + 1.25, -15);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
@@ -352,12 +355,11 @@ function create3DTool(positionPoint = null, normalVector = null) {
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
 
-    // KUNCI PERBAIKAN ORIENTASI: 
-    // Normal permukaan dikalikan -1 agar badan alat berada di LUAR permukaan kayu,
-    // sementara UJUNG MATA ALAT di (0,0,0) menempel tepat di kulit kayu.
-    const inwardNormal = normalVector.clone().negate();
+    // DENGAN (0,0,0) DILOKASI MATA ALAT: 
+    // Mengarahkan Vektor (0,1,0) searah Vektor Normal Permukaan Kayu
+    // membuat alat berdiri tegak menancap secara presisi di permukaan!
     const up = new THREE.Vector3(0, 1, 0);
-    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, inwardNormal);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
 
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
@@ -383,7 +385,7 @@ function updateAlatTransform() {
   }
 }
 
-/* --- TANGKAP KLIK SELEKSI --- */
+/* --- TANGKAP KLIK SELEKSI & PERMUKAAN --- */
 function onViewportClick(event) {
   if (event.target.tagName !== 'CANVAS' || transformControl.dragging || isCuttingAnimation) return;
 
@@ -451,7 +453,8 @@ function eksekusiPemotongan() {
 
     if (activeAlat === 'bor') {
       toolGroup.rotation.y = startRot.y + progress * Math.PI * 20;
-      const depthOffset = new THREE.Vector3(0, Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
+      // Dorong masuk menembus kayu
+      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'gergaji') {
@@ -461,7 +464,7 @@ function eksekusiPemotongan() {
 
     } else if (activeAlat === 'pahat') {
       const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
-      const hammerVec = new THREE.Vector3(0, hammer, 0).applyQuaternion(toolGroup.quaternion);
+      const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(hammerVec);
     }
 
@@ -480,7 +483,7 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL PEMOTONGAN RONGGA FISIK --- */
+/* --- PEMBUATAN RONGGA BEBAS EROR (DITIMBULKAN MULAI DARI KULIT KAYU MENEMBUS KEDALAMAN valDepth) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
@@ -489,7 +492,7 @@ function prosesCutterVisualResult(targetObj) {
 
   let cutMesh;
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x5a3210, // Cokelat tua serat bagian dalam kayu
+    color: 0x5a3210, // Cokelat tua serat internal kayu
     roughness: 0.9,
     metalness: 0.0
   });
@@ -497,20 +500,21 @@ function prosesCutterVisualResult(targetObj) {
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
     const holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    // Geser geometri rongga agar BERMULA DARI Y=0 MENEMBUS SEBESAR valDepth
+    holeGeo.translate(0, valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
     const holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo.translate(0, valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else {
     const holeGeo = new THREE.BoxGeometry(0.5, valDepth, 40);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo.translate(0, valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   }
