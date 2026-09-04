@@ -6,25 +6,25 @@
   <title>Simulasi Pemotongan Kayu 3D - CSG Subtraction</title>
   <link rel="stylesheet" href="css/style.css">
   
-  <!-- Three.js Library -->
+  <!-- Three.js Library & Controls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
 </head>
 <body>
 
-  <!-- Area Viewport 3D -->
+  <!-- Area Viewport 3D Canvas -->
   <div id="viewport"></div>
 
   <!-- Rotation Tooltip -->
-  <div id="rotationTooltip" style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; font-family: monospace; z-index: 100;">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
+  <div id="rotationTooltip" style="display: none;">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
 
   <!-- Sidebar & Controls UI -->
-  <div class="sidebar" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(20,20,25,0.9); color: #fff; padding: 15px; border-radius: 8px; width: 280px; font-family: sans-serif;">
+  <div class="sidebar">
     <h3>🪵 Area Kerja Woodworking</h3>
     
     <!-- Fase Switcher -->
-    <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+    <div class="btn-group">
       <button id="fasePahat" class="active" onclick="setFase('pahat')">🪛 Pahat</button>
       <button id="faseRakit" onclick="setFase('rakit')">🧩 Rakit</button>
       <button id="faseUji" onclick="setFase('uji')">📐 Uji</button>
@@ -32,7 +32,7 @@
 
     <!-- Pilihan Alat Pemahat -->
     <h4>Alat Pemahat</h4>
-    <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+    <div class="btn-group">
       <button id="item-gergaji" onclick="toggleAlat('gergaji')">🪚 Gergaji</button>
       <button id="item-pahat" onclick="toggleAlat('pahat')">🪛 Pahat</button>
       <button id="item-bor" onclick="toggleAlat('bor')">🔘 Bor</button>
@@ -40,72 +40,72 @@
 
     <!-- Tambah Benda Kerja -->
     <h4>Tambah Benda Kerja</h4>
-    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+    <div class="btn-group">
       <button id="type-balok" class="active" onclick="setJenisBahanBaru('balok')">Balok</button>
       <button id="type-silinder" onclick="setJenisBahanBaru('silinder')">Silinder</button>
     </div>
-    <button onclick="tambahBendaKerja()" style="width: 100%; margin-bottom: 15px;">+ Tambah Bahan</button>
+    <button class="btn-primary" onclick="tambahBendaKerja()">+ Tambah Bahan</button>
 
     <!-- Daftar Benda Kerja -->
     <h4>Daftar Benda Kerja</h4>
-    <div id="objectList" style="max-height: 120px; overflow-y: auto; margin-bottom: 15px;"></div>
+    <div id="objectList"></div>
 
     <!-- Pengaturan Objek Terpilih -->
-    <div id="selectedObjectControls" style="display: none; border-top: 1px solid #444; padding-top: 10px;">
+    <div id="selectedObjectControls" style="display: none;">
       <h4>Edit Dimensi Objek</h4>
       
-      <div id="groupBalokDim" style="display: flex; flex-direction: column; gap: 5px;">
+      <div id="groupBalokDim" class="input-group">
         <label>Panjang (P): <input type="number" id="objP" onchange="updateObjekTerpilih()"></label>
         <label>Lebar (L): <input type="number" id="objL" onchange="updateObjekTerpilih()"></label>
         <label>Tinggi/Tebal (T): <input type="number" id="objT" onchange="updateObjekTerpilih()"></label>
       </div>
 
-      <div id="groupSilinderDim" style="display: none; flex-direction: column; gap: 5px;">
+      <div id="groupSilinderDim" class="input-group" style="display: none;">
         <label>Diameter (D): <input type="number" id="objDiameter" onchange="updateObjekTerpilih()"></label>
         <label>Tinggi (P): <input type="number" id="objTinggiSilinder" onchange="updateObjekTerpilih()"></label>
       </div>
 
-      <label style="margin-top: 8px; display: block;">Transparansi: 
+      <label class="slider-label">Transparansi: 
         <input type="range" id="objOpacity" min="0.1" max="1.0" step="0.05" oninput="updateObjekTerpilih()">
         <span id="opacityVal">100%</span>
       </label>
 
-      <div style="margin-top: 10px;">
-        <label>Rotasi X: <input type="number" id="objRotX" onchange="updateObjekRotasiManual()" style="width: 50px;"></label>
-        <label>Y: <input type="number" id="objRotY" onchange="updateObjekRotasiManual()" style="width: 50px;"></label>
-        <label>Z: <input type="number" id="objRotZ" onchange="updateObjekRotasiManual()" style="width: 50px;"></label>
+      <div class="rot-inputs">
+        <label>Rotasi X: <input type="number" id="objRotX" onchange="updateObjekRotasiManual()"></label>
+        <label>Y: <input type="number" id="objRotY" onchange="updateObjekRotasiManual()"></label>
+        <label>Z: <input type="number" id="objRotZ" onchange="updateObjekRotasiManual()"></label>
       </div>
     </div>
 
     <!-- Modus Gizmo -->
-    <div style="margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
+    <div class="gizmo-controls">
       <button id="btnToggleTranslate" class="active" onclick="setGizmoActiveMode('translate')">Move</button>
       <button id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">Rotate</button>
       <button id="btnToggleOff" onclick="setGizmoActiveMode('off')">Off</button>
-      <button onclick="bersihkanAreaKerja()" style="background: #a22; color: #fff; float: right;">Kosongkan</button>
+      <button class="btn-danger" onclick="bersihkanAreaKerja()">Kosongkan</button>
     </div>
   </div>
 
   <!-- Overlay Panel Alat -->
-  <div id="toolOverlayPanel" style="display: none; position: absolute; bottom: 20px; right: 20px; background: rgba(20,20,25,0.9); color: #fff; padding: 15px; border-radius: 8px; width: 260px; font-family: sans-serif; z-index: 10;">
-    <h4 style="margin: 0 0 10px 0;"><span id="toolOverlayIcon">🪛</span> <span id="toolOverlayName">Kontrol Alat</span></h4>
+  <div id="toolOverlayPanel" style="display: none;">
+    <h4><span id="toolOverlayIcon">🪛</span> <span id="toolOverlayName">Kontrol Alat</span></h4>
     
-    <div id="rowToolDiameter" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+    <div id="rowToolDiameter" class="tool-row">
       <label id="lblToolDiameter">Diameter Alat:</label>
-      <input type="number" id="toolDiameter" value="2" min="0.5" step="0.5" onchange="updateAlatTransform()" style="width: 60px;">
+      <input type="number" id="toolDiameter" value="2" min="0.5" step="0.5" onchange="updateAlatTransform()">
     </div>
 
-    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+    <div class="tool-row">
       <label>Kedalaman Potong:</label>
-      <input type="number" id="toolDepth" value="6" min="1" step="0.5" onchange="updateAlatTransform()" style="width: 60px;">
+      <input type="number" id="toolDepth" value="6" min="1" step="0.5" onchange="updateAlatTransform()">
     </div>
 
-    <button onclick="eksekusiPemotongan()" style="width: 100%; background: #28a745; color: white; padding: 8px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Eksekusi Pemotongan</button>
+    <button class="btn-execute" onclick="eksekusiPemotongan()">Eksekusi Pemotongan</button>
     
-    <div id="hintBoxText" style="font-size: 0.8em; color: #aaa; margin-top: 10px;">💡 Klik permukaan kayu untuk menempatkan alat.</div>
+    <div id="hintBoxText">💡 Klik permukaan kayu untuk menempatkan alat.</div>
   </div>
 
-  <!-- MUAT SCRIPT CSG TERLEBIH DAHULU SEBELUM APP.JS -->
+  <!-- LOAD SCRIPT CSG BARU SEBELUM APP.JS -->
   <script src="js/csg.js"></script>
   <script src="js/app.js"></script>
 </body>
