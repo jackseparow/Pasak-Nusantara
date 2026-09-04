@@ -1,17 +1,15 @@
-let scene, camera, renderer, controls, dragControls;
+let scene, camera, renderer, controls, transformControls;
 let bendaKerjaList = [];
-let draggableObjects = [];
 let selectedObjIndex = -1;
 let jenisBahanBaru = 'balok';
-let activeAlat = null; // null jika deselect
+let activeAlat = null; 
 let activeFase = 'pahat';
+let currentGizmoMode = 'translate'; // 'translate' atau 'rotate'
 
 let toolGroup = null;
-let cutterGeometryMesh = null; // Mesh pemotong untuk kalkulasi CSG
+let cutterGeometryMesh = null;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
-let targetGridPoint = new THREE.Vector3();
-let isTargetLocked = false;
 
 window.addEventListener('DOMContentLoaded', () => {
   initThreeJS();
@@ -32,11 +30,20 @@ function initThreeJS() {
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
+  // Orbit Controls (Rotasi Kamera)
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  initDragControls();
+  // Transform Controls (Gizmo Melayang untuk Geser & Putar)
+  transformControls = new THREE.TransformControls(camera, renderer.domElement);
+  transformControls.size = 0.85;
+  scene.add(transformControls);
+
+  // Matikan OrbitControls saat gizmo digerakkan pengguna
+  transformControls.addEventListener('dragging-changed', (event) => {
+    controls.enabled = !event.value;
+  });
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -52,46 +59,37 @@ function initThreeJS() {
   const globalAxes = new THREE.AxesHelper(15);
   scene.add(globalAxes);
 
-  container.addEventListener('mousemove', onViewportMouseMove);
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
 
   animate();
 }
 
-/* --- DRAG CONTROLS --- */
-function initDragControls() {
-  dragControls = new THREE.DragControls(draggableObjects, camera, renderer.domElement);
+/* --- LOGIKA GIZMO MELAYANG (GESER & PUTAR) --- */
+function setGizmoMode(mode) {
+  currentGizmoMode = mode;
+  transformControls.setMode(mode);
 
-  dragControls.addEventListener('dragstart', (event) => {
-    controls.enabled = false;
-    const parentGroup = event.object.parent;
-    const foundIndex = bendaKerjaList.findIndex(b => b.group === parentGroup);
-    if (foundIndex !== -1 && foundIndex !== selectedObjIndex) {
-      pilihBendaKerja(foundIndex);
-    }
-  });
-
-  dragControls.addEventListener('dragend', () => {
-    controls.enabled = true;
-  });
+  document.getElementById('btnModeTranslate').classList.toggle('active', mode === 'translate');
+  document.getElementById('btnModeRotate').classList.toggle('active', mode === 'rotate');
 }
 
-function updateDraggableList() {
-  draggableObjects.length = 0;
-  bendaKerjaList.forEach(item => {
-    if (item.mainMesh) {
-      draggableObjects.push(item.mainMesh);
-    }
-  });
+function attachGizmoToObject(targetObject) {
+  if (targetObject) {
+    transformControls.attach(targetObject);
+    transformControls.visible = true;
+  } else {
+    transformControls.detach();
+    transformControls.visible = false;
+  }
 }
 
 /* --- SELECT / DESELECT ALAT --- */
 function toggleAlat(alat) {
   if (activeAlat === alat) {
-    activeAlat = null; // Deselect alat
+    activeAlat = null; // Deselect
   } else {
-    activeAlat = alat; // Select alat baru
+    activeAlat = alat; // Select
   }
 
   document.getElementById('item-gergaji').classList.toggle('active', activeAlat === 'gergaji');
@@ -105,10 +103,18 @@ function toggleAlat(alat) {
     document.getElementById('toolOverlayIcon').innerText = icons[activeAlat];
     document.getElementById('toolOverlayName').innerText = `Kontrol ${names[activeAlat]}`;
     toolPanel.style.display = 'block';
+
     create3DTool();
+    pilihBendaKerja(selectedObjIndex, false); // Keep or attach gizmo to tool
+    attachGizmoToObject(toolGroup);
   } else {
     toolPanel.style.display = 'none';
     if (toolGroup) { scene.remove(toolGroup); toolGroup = null; }
+    if (selectedObjIndex >= 0) {
+      attachGizmoToObject(bendaKerjaList[selectedObjIndex].group);
+    } else {
+      attachGizmoToObject(null);
+    }
   }
 }
 
@@ -159,52 +165,27 @@ function create3DTool() {
     toolGroup.add(head);
   }
 
+  // Posisikan alat di dekat benda kerja aktif jika ada
+  if (selectedObjIndex >= 0) {
+    toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
+    toolGroup.position.y += 10;
+  } else {
+    toolGroup.position.set(0, 15, 0);
+  }
+
   scene.add(toolGroup);
   updateAlatTransform();
 }
 
 function updateAlatTransform() {
   if (!toolGroup) return;
-
-  const rotX = (parseFloat(document.getElementById('toolRotX').value) || 0) * (Math.PI / 180);
-  const rotY = (parseFloat(document.getElementById('toolRotY').value) || 0) * (Math.PI / 180);
   const depth = parseFloat(document.getElementById('toolDepth').value) || 4;
-
-  toolGroup.rotation.set(rotX, rotY, 0);
   toolGroup.scale.set(1, depth / 4, 1);
 }
 
-/* --- RAYCASTING & INTERAKSI MOUSE --- */
-function onViewportMouseMove(event) {
-  if (isTargetLocked || !activeAlat || activeFase !== 'pahat') return;
-
-  const container = document.getElementById('viewport');
-  const rect = container.getBoundingClientRect();
-  
-  mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
-  mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObjects(draggableObjects);
-
-  if (intersects.length > 0) {
-    const hitPoint = intersects[0].point;
-
-    targetGridPoint.set(
-      Math.round(hitPoint.x),
-      Math.round(hitPoint.y),
-      Math.round(hitPoint.z)
-    );
-
-    toolGroup.position.copy(targetGridPoint);
-    document.getElementById('targetCoordLabel').innerText = 
-      `Target Grid: (${targetGridPoint.x}, ${targetGridPoint.y}, ${targetGridPoint.z})`;
-  }
-}
-
+/* --- INTERAKSI KLIK & SELEKSI --- */
 function onViewportClick(event) {
-  if (event.target.tagName !== 'CANVAS') return;
+  if (event.target.tagName !== 'CANVAS' || transformControls.dragging) return;
 
   const container = document.getElementById('viewport');
   const rect = container.getBoundingClientRect();
@@ -213,28 +194,30 @@ function onViewportClick(event) {
   mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(draggableObjects);
+
+  // Kumpulkan semua mesh kayu
+  const targetMeshes = [];
+  bendaKerjaList.forEach(b => { if (b.mainMesh) targetMeshes.push(b.mainMesh); });
+
+  const intersects = raycaster.intersectObjects(targetMeshes);
 
   if (intersects.length > 0) {
     const parentGroup = intersects[0].object.parent;
     const foundIndex = bendaKerjaList.findIndex(b => b.group === parentGroup);
+    
     if (foundIndex !== -1) {
-      if (selectedObjIndex === foundIndex && activeAlat === null) {
-        pilihBendaKerja(-1); // Deselect jika diklik ulang tanpa alat
+      if (selectedObjIndex === foundIndex && !activeAlat) {
+        pilihBendaKerja(-1); // Deselect kayu
       } else {
         pilihBendaKerja(foundIndex);
       }
     }
   } else if (!activeAlat) {
-    pilihBendaKerja(-1); // Deselect jika klik di ruang kosong
-  }
-
-  if (activeAlat && activeFase === 'pahat') {
-    isTargetLocked = !isTargetLocked;
+    pilihBendaKerja(-1); // Klik ruang kosong untuk deselect
   }
 }
 
-/* --- OPERASI PEMOTONGAN REAL CSG --- */
+/* --- OPERASI PEMOTONGAN CSG NYATA --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -242,25 +225,22 @@ function eksekusiPemotongan() {
   }
 
   const targetObj = bendaKerjaList[selectedObjIndex];
-  if (!targetObj.mainMesh) return;
+  if (!targetObj.mainMesh || !cutterGeometryMesh) return;
 
   try {
-    // 1. Konversi objek kayu dan alat pemotong ke CSG Mesh
     targetObj.mainMesh.updateMatrixWorld();
     cutterGeometryMesh.updateMatrixWorld();
 
-    // Buat dummy mesh pemotong dengan posisi & transformasi global yang tepat
     const cutterMeshWorld = cutterGeometryMesh.clone();
     cutterMeshWorld.position.copy(toolGroup.position);
     cutterMeshWorld.rotation.copy(toolGroup.rotation);
     cutterMeshWorld.scale.copy(toolGroup.scale);
-    cutterMeshWorld.position.sub(targetObj.group.position); // Relatif terhadap induk kayu
+    cutterMeshWorld.position.sub(targetObj.group.position);
     cutterMeshWorld.updateMatrix();
 
     const csgTarget = THREE.CSG.fromMesh(targetObj.mainMesh);
     const csgCutter = THREE.CSG.fromMesh(cutterMeshWorld);
 
-    // 2. Operasi Pengurangan CSG (Subtract / Potong / Lubang)
     const csgResult = csgTarget.subtract(csgCutter);
     const newMeshResult = THREE.CSG.toMesh(csgResult, targetObj.mainMesh.matrix);
 
@@ -268,14 +248,11 @@ function eksekusiPemotongan() {
     newMeshResult.castShadow = true;
     newMeshResult.receiveShadow = true;
 
-    // 3. Ganti Mesh Utama Kayu dengan Mesh Hasil Potongan
     targetObj.group.remove(targetObj.mainMesh);
     targetObj.mainMesh = newMeshResult;
     targetObj.group.add(targetObj.mainMesh);
 
-    // 4. Regenerasi Outlines & Strimin pada Bentuk Baru
     rebuildOverlays(targetObj);
-    updateDraggableList();
 
     alert(`Pemotongan CSG Berhasil pada ${targetObj.nama}!`);
   } catch (err) {
@@ -285,7 +262,6 @@ function eksekusiPemotongan() {
 }
 
 function rebuildOverlays(item) {
-  // Hapus overlay lama
   const toRemove = [];
   item.group.children.forEach(child => {
     if (child !== item.mainMesh && !(child instanceof THREE.AxesHelper)) {
@@ -294,7 +270,6 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // Buat Wireframe Edges baru berdasarkan geometri hasil potong
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
@@ -346,7 +321,7 @@ function hapusBendaKerja(index, event) {
   }
 }
 
-function pilihBendaKerja(index) {
+function pilihBendaKerja(index, attachGizmo = true) {
   selectedObjIndex = index;
   const controlsDiv = document.getElementById('selectedObjectControls');
 
@@ -358,9 +333,17 @@ function pilihBendaKerja(index) {
     document.getElementById('objOpacity').value = item.opacity;
     document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
     controlsDiv.style.display = 'block';
-    updateObjekMesh(item);
+
+    if (!item.mainMesh) updateObjekMesh(item);
+
+    if (attachGizmo && !activeAlat) {
+      attachGizmoToObject(item.group);
+    }
   } else {
     controlsDiv.style.display = 'none';
+    if (attachGizmo && !activeAlat) {
+      attachGizmoToObject(null);
+    }
   }
 
   renderObjectListUI();
@@ -374,7 +357,7 @@ function renderObjectListUI() {
     const card = document.createElement('div');
     card.className = `object-card ${idx === selectedObjIndex ? 'active' : ''}`;
     card.onclick = () => {
-      if (selectedObjIndex === idx) pilihBendaKerja(-1); // Deselect
+      if (selectedObjIndex === idx) pilihBendaKerja(-1);
       else pilihBendaKerja(idx);
     };
 
@@ -436,6 +419,7 @@ function updateObjekMesh(item) {
   item.mainMesh.receiveShadow = true;
   group.add(item.mainMesh);
 
+  // Wireframe Strimin Overlay (Tergabung di dalam Group sehingga otomatis ikut bergeser & berputar)
   const wireframeMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -452,8 +436,6 @@ function updateObjekMesh(item) {
   group.add(objectAxes);
 
   group.position.y = height / 2;
-
-  updateDraggableList();
 }
 
 function setFase(fase) {
