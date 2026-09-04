@@ -33,7 +33,6 @@ function initThreeJS() {
   camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
   camera.position.set(35, 35, 45);
 
-  // Stencil Buffer diaktifkan untuk masker pemotongan murni
   renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
@@ -282,7 +281,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D (PIVOT DI UJUNG MATA POTONG) --- */
+/* --- MODEL ALAT 3D (PIVOT UJUNG MATA POTONG) --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -483,12 +482,12 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA POTONGAN (STENCIL MASKING: JEJAK SELALU KELIHATAN & ANTI MENONJOL) --- */
+/* --- HASIL RONGGA POTONGAN (POLYGON OFFSET & AUTO CLAMP: TAMPAK BERLUBANG & ANTI MENONJOL) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // 1. Dapatkan ketebalan bahan kayu
+  // 1. Deteksi ketebalan fisik bahan kayu pada bidang yang diklik
   let maxThickness = 30;
   if (targetObj.jenis === 'balok') {
     const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
@@ -499,7 +498,7 @@ function prosesCutterVisualResult(targetObj) {
     maxThickness = targetObj.t;
   }
 
-  // 2. Batasi kedalaman maksimal seukuran tebal bahan
+  // 2. CLAMP KEDALAMAN: Mencegah hasil potong mencuat keluar dari fisik bahan
   const effectiveDepth = Math.min(valDepthInput, maxThickness);
   const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
 
@@ -508,13 +507,12 @@ function prosesCutterVisualResult(targetObj) {
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
     holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32);
-    // Offset sedikit ke dalam agar permukaan atas lubang tepat menembus permukaan kayu
-    holeGeo.translate(0, -effectiveDepth / 2 + 0.05, 0);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
     holeGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
-    holeGeo.translate(0, -effectiveDepth / 2 + 0.05, 0);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
   } else { // gergaji
     let targetSpan = 12;
@@ -525,17 +523,18 @@ function prosesCutterVisualResult(targetObj) {
     }
 
     holeGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
-    holeGeo.translate(0, -effectiveDepth / 2 + 0.05, 0);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
   }
 
-  // 3. MATERIAL COKELAT TUA RONGGA POTONGAN DENGAN RENDER ORDER TINGGI
+  // 3. MATERIAL DENGAN POLYGON OFFSET & RENDERING DIPRIORITASKAN (JEJAK DIJAMIN KELIHATAN)
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x221105, // Cokelat kayu bagian dalam
-    roughness: 0.9,
+    color: 0x1a0a02,            // Cokelat tua kedalaman kayu
+    roughness: 0.95,
     metalness: 0.0,
-    side: THREE.DoubleSide,
-    depthTest: true,
-    depthWrite: true
+    side: THREE.DoubleSide,     // Render permukaan dalam dan luar
+    polygonOffset: true,        // Memaksa penumpukan rendering di atas kayu
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2
   });
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
@@ -544,15 +543,14 @@ function prosesCutterVisualResult(targetObj) {
   cutMesh.quaternion.copy(toolGroup.quaternion);
   cutMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
 
-  // Pastikan lubang dirender tepat di atas permukaan kayu tanpa pernah tenggelam
-  cutMesh.renderOrder = (targetObj.group.children.length || 1) + 10;
+  cutMesh.renderOrder = 99; // Memastikan GPU menggambar jejak potongan tanpa pernah tertutup
 
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Garis Penegas Lubang Neon Oranye
+  // Garis tepi batas potong neon oranye
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
-  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
+  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff7700, linewidth: 2 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
   cutMesh.add(cutLineSegments);
 
