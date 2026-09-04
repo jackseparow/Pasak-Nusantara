@@ -3,431 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Geoblock - Pasak Nusantara 3D</title>
+  <title>Simulasi Pemotongan Kayu 3D - CSG Subtraction</title>
+  <link rel="stylesheet" href="css/style.css">
   
-  <!-- Three.js, OrbitControls, TransformControls, & CSG -->
+  <!-- Three.js Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/manthrax/THREE-CSGMesh@v1.0.0/ThreeCSG.js"></script>
-
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-      background-color: #121218;
-      color: #fff;
-    }
-    
-    header {
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-      padding: 10px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      z-index: 10;
-    }
-    .logo-container { display: flex; align-items: center; gap: 12px; }
-    .header-logo { height: 38px; width: auto; }
-    .title-group h1 { font-size: 1.1rem; font-weight: 700; }
-    .title-group p { font-size: 0.75rem; opacity: 0.85; }
-
-    .main-container { display: flex; flex: 1; height: calc(100vh - 58px); }
-    
-    #stock-panel {
-      width: 310px;
-      background-color: #1e1e28;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      border-right: 1px solid #2e2e3e;
-      overflow-y: auto;
-      user-select: none;
-    }
-
-    .stock-section {
-      background-color: #252535;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #333346;
-    }
-
-    .stock-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #4a82e8;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .stock-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 8px;
-    }
-
-    .stock-item {
-      background-color: #1a1a24;
-      border: 2px solid #3b3b52;
-      border-radius: 8px;
-      padding: 10px 6px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .stock-item:hover { border-color: #4a82e8; background-color: #2a2a3c; }
-    .stock-item.active { border-color: #4a82e8; background-color: #2a5298; }
-
-    .stock-icon { font-size: 1.5rem; }
-    .stock-label { font-size: 0.75rem; font-weight: 600; color: #ddd; text-align: center; }
-
-    .param-group {
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .param-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.78rem;
-    }
-
-    .param-row input[type="number"] {
-      width: 60px;
-      padding: 3px;
-      border-radius: 4px;
-      border: 1px solid #4a4a60;
-      background: #121218;
-      color: #fff;
-      text-align: center;
-    }
-
-    .param-row input[type="range"] { flex: 1; margin-left: 8px; }
-
-    .object-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-height: 140px;
-      overflow-y: auto;
-      margin-top: 8px;
-    }
-
-    .object-card {
-      background: #1a1a24;
-      padding: 6px 10px;
-      border-radius: 6px;
-      border: 1px solid #3b3b52;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.75rem;
-      cursor: pointer;
-    }
-
-    .object-card.active { border-color: #4a82e8; background: #2a5298; }
-    .btn-del { color: #ff5555; cursor: pointer; font-weight: bold; border: none; background: none; }
-
-    .btn-add {
-      width: 100%;
-      padding: 8px;
-      background: #2a5298;
-      border: none;
-      color: #fff;
-      font-weight: 600;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 8px;
-      font-size: 0.78rem;
-    }
-
-    .btn-clear {
-      width: 100%;
-      padding: 8px;
-      background: #d9534f;
-      border: none;
-      color: #fff;
-      font-weight: 600;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 6px;
-      font-size: 0.78rem;
-      transition: background 0.2s;
-    }
-    .btn-clear:hover { background: #c9302c; }
-
-    #viewport { flex: 1; position: relative; background-color: #0d0d12; }
-
-    .phase-bar {
-      position: absolute;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      background: rgba(25, 25, 35, 0.85);
-      padding: 6px;
-      border-radius: 8px;
-      backdrop-filter: blur(4px);
-      border: 1px solid #3b3b52;
-      z-index: 5;
-    }
-
-    .btn-phase {
-      padding: 6px 14px;
-      border: none;
-      background: transparent;
-      color: #aaa;
-      font-weight: 600;
-      font-size: 0.8rem;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .btn-phase.active { background: #2a5298; color: #fff; }
-
-    .transform-toggle-box {
-      position: absolute;
-      bottom: 16px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      background: rgba(25, 25, 35, 0.9);
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: 1px solid #4a82e8;
-      z-index: 5;
-    }
-
-    .btn-toggle-gizmo {
-      background: #1a1a24;
-      border: 1px solid #3b3b52;
-      color: #aaa;
-      padding: 6px 12px;
-      font-size: 0.75rem;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    .btn-toggle-gizmo.active { background: #2a5298; color: #fff; border-color: #4a82e8; }
-
-    .rotation-tooltip {
-      position: absolute;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(42, 82, 152, 0.9);
-      color: #fff;
-      padding: 6px 14px;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: bold;
-      border: 1px solid #61afef;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-      display: none;
-      z-index: 10;
-    }
-
-    .tool-overlay-panel {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      width: 230px;
-      background: rgba(25, 25, 35, 0.9);
-      border: 1px solid #4a82e8;
-      border-radius: 8px;
-      padding: 12px;
-      backdrop-filter: blur(6px);
-      z-index: 5;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-      display: none;
-    }
-
-    .tool-overlay-title {
-      font-size: 0.8rem;
-      font-weight: bold;
-      color: #4a82e8;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .btn-cut {
-      width: 100%;
-      padding: 8px;
-      background: #d9534f;
-      border: none;
-      color: #fff;
-      font-weight: bold;
-      border-radius: 4px;
-      cursor: pointer;
-      margin-top: 10px;
-      font-size: 0.8rem;
-      transition: background 0.2s;
-    }
-    .btn-cut:hover { background: #c9302c; }
-
-    .hint-box {
-      font-size: 0.72rem;
-      color: #aaa;
-      line-height: 1.35;
-      background: rgba(0, 0, 0, 0.25);
-      padding: 8px;
-      border-radius: 6px;
-      border-left: 3px solid #4a82e8;
-    }
-  </style>
 </head>
 <body>
 
-  <header>
-    <div class="logo-container">
-      <img src="assets/logo-bbgtk.png" alt="BBGTK" class="header-logo" onerror="this.style.display='none'">
-      <img src="assets/logo-taman-numerasi.png" alt="Taman Numerasi" class="header-logo" onerror="this.style.display='none'">
-      <div class="title-group">
-        <h1>GEOBLOCK 3D: PASAK NUSANTARA</h1>
-        <p>Eksplorasi Geometri & Sambungan Kayu Tradisional</p>
-      </div>
-    </div>
-  </header>
+  <!-- Area Viewport 3D -->
+  <div id="viewport"></div>
 
-  <div class="main-container">
-    <div id="stock-panel">
+  <!-- Rotation Tooltip -->
+  <div id="rotationTooltip" style="display: none; position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 8px 16px; border-radius: 4px; font-family: monospace; z-index: 100;">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
+
+  <!-- Sidebar & Controls UI -->
+  <div class="sidebar" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(20,20,25,0.9); color: #fff; padding: 15px; border-radius: 8px; width: 280px; font-family: sans-serif;">
+    <h3>🪵 Area Kerja Woodworking</h3>
+    
+    <!-- Fase Switcher -->
+    <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+      <button id="fasePahat" class="active" onclick="setFase('pahat')">🪛 Pahat</button>
+      <button id="faseRakit" onclick="setFase('rakit')">🧩 Rakit</button>
+      <button id="faseUji" onclick="setFase('uji')">📐 Uji</button>
+    </div>
+
+    <!-- Pilihan Alat Pemahat -->
+    <h4>Alat Pemahat</h4>
+    <div style="display: flex; gap: 5px; margin-bottom: 15px;">
+      <button id="item-gergaji" onclick="toggleAlat('gergaji')">🪚 Gergaji</button>
+      <button id="item-pahat" onclick="toggleAlat('pahat')">🪛 Pahat</button>
+      <button id="item-bor" onclick="toggleAlat('bor')">🔘 Bor</button>
+    </div>
+
+    <!-- Tambah Benda Kerja -->
+    <h4>Tambah Benda Kerja</h4>
+    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+      <button id="type-balok" class="active" onclick="setJenisBahanBaru('balok')">Balok</button>
+      <button id="type-silinder" onclick="setJenisBahanBaru('silinder')">Silinder</button>
+    </div>
+    <button onclick="tambahBendaKerja()" style="width: 100%; margin-bottom: 15px;">+ Tambah Bahan</button>
+
+    <!-- Daftar Benda Kerja -->
+    <h4>Daftar Benda Kerja</h4>
+    <div id="objectList" style="max-height: 120px; overflow-y: auto; margin-bottom: 15px;"></div>
+
+    <!-- Pengaturan Objek Terpilih -->
+    <div id="selectedObjectControls" style="display: none; border-top: 1px solid #444; padding-top: 10px;">
+      <h4>Edit Dimensi Objek</h4>
       
-      <!-- Panel Benda Kerja -->
-      <div class="stock-section">
-        <div class="stock-title">📦 Benda Kerja (Multi-Kayu)</div>
-        
-        <div class="stock-grid">
-          <div class="stock-item active" id="type-balok" onclick="setJenisBahanBaru('balok')">
-            <div class="stock-icon">🪵</div>
-            <div class="stock-label">Balok</div>
-          </div>
-          <div class="stock-item" id="type-silinder" onclick="setJenisBahanBaru('silinder')">
-            <div class="stock-icon">🥢</div>
-            <div class="stock-label">Pasak Silinder</div>
-          </div>
-        </div>
-
-        <button class="btn-add" onclick="tambahBendaKerja()">+ Tambah Benda Kerja</button>
-        <button class="btn-clear" onclick="bersihkanAreaKerja()">🧹 Bersihkan Area Kerja</button>
-
-        <div class="object-list" id="objectList"></div>
-
-        <!-- Setting Objek Terpilih -->
-        <div id="selectedObjectControls" style="margin-top: 12px; border-top: 1px solid #333346; padding-top: 8px; display: none;">
-          <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-bottom: 6px;">Dimensi Benda Kerja</div>
-          
-          <div class="param-group" id="groupBalokDim">
-            <div class="param-row"><label>Panjang (X):</label><input type="number" id="objP" value="10" min="1" oninput="updateObjekTerpilih()"></div>
-            <div class="param-row"><label>Lebar (Z):</label><input type="number" id="objL" value="10" min="1" oninput="updateObjekTerpilih()"></div>
-            <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="objT" value="30" min="1" oninput="updateObjekTerpilih()"></div>
-          </div>
-
-          <div class="param-group" id="groupSilinderDim" style="display: none;">
-            <div class="param-row"><label>Diameter (D):</label><input type="number" id="objDiameter" value="6" min="1" oninput="updateObjekTerpilih()"></div>
-            <div class="param-row"><label>Tinggi (H):</label><input type="number" id="objTinggiSilinder" value="25" min="1" oninput="updateObjekTerpilih()"></div>
-          </div>
-
-          <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-top: 10px; margin-bottom: 6px;">Sudut Rotasi Kayu (°)</div>
-          <div class="param-group">
-            <div class="param-row"><label>Rotasi X (°):</label><input type="number" id="objRotX" value="0" step="1" oninput="updateObjekRotasiManual()"></div>
-            <div class="param-row"><label>Rotasi Y (°):</label><input type="number" id="objRotY" value="0" step="1" oninput="updateObjekRotasiManual()"></div>
-            <div class="param-row"><label>Rotasi Z (°):</label><input type="number" id="objRotZ" value="0" step="1" oninput="updateObjekRotasiManual()"></div>
-          </div>
-
-          <div class="param-group" style="margin-top: 10px;">
-            <div class="param-row"><label>Transparansi (X-Ray):</label></div>
-            <div class="param-row">
-              <input type="range" id="objOpacity" min="0.1" max="1" step="0.05" value="1" oninput="updateObjekTerpilih()">
-              <span id="opacityVal" style="font-size: 0.7rem; width: 30px; text-align: right;">100%</span>
-            </div>
-          </div>
-        </div>
+      <div id="groupBalokDim" style="display: flex; flex-direction: column; gap: 5px;">
+        <label>Panjang (P): <input type="number" id="objP" onchange="updateObjekTerpilih()"></label>
+        <label>Lebar (L): <input type="number" id="objL" onchange="updateObjekTerpilih()"></label>
+        <label>Tinggi/Tebal (T): <input type="number" id="objT" onchange="updateObjekTerpilih()"></label>
       </div>
 
-      <!-- Panel Alat Kerja -->
-      <div class="stock-section">
-        <div class="stock-title">🛠️ Pilih Alat Pemahat</div>
-        <div class="stock-grid">
-          <div class="stock-item" id="item-gergaji" onclick="toggleAlat('gergaji')">
-            <div class="stock-icon">🪚</div>
-            <div class="stock-label">Gergaji</div>
-          </div>
-          <div class="stock-item" id="item-pahat" onclick="toggleAlat('pahat')">
-            <div class="stock-icon">🪛</div>
-            <div class="stock-label">Pahat</div>
-          </div>
-          <div class="stock-item" id="item-bor" onclick="toggleAlat('bor')">
-            <div class="stock-icon">🔘</div>
-            <div class="stock-label">Bor</div>
-          </div>
-        </div>
+      <div id="groupSilinderDim" style="display: none; flex-direction: column; gap: 5px;">
+        <label>Diameter (D): <input type="number" id="objDiameter" onchange="updateObjekTerpilih()"></label>
+        <label>Tinggi (P): <input type="number" id="objTinggiSilinder" onchange="updateObjekTerpilih()"></label>
       </div>
 
-      <div class="hint-box" id="hintBoxText">
-        💡 Klik permukaan kayu di area 3D untuk menempatkan mata alat, lalu klik <strong>Eksekusi Pemotongan</strong>.
-      </div>
+      <label style="margin-top: 8px; display: block;">Transparansi: 
+        <input type="range" id="objOpacity" min="0.1" max="1.0" step="0.05" oninput="updateObjekTerpilih()">
+        <span id="opacityVal">100%</span>
+      </label>
 
+      <div style="margin-top: 10px;">
+        <label>Rotasi X: <input type="number" id="objRotX" onchange="updateObjekRotasiManual()" style="width: 50px;"></label>
+        <label>Y: <input type="number" id="objRotY" onchange="updateObjekRotasiManual()" style="width: 50px;"></label>
+        <label>Z: <input type="number" id="objRotZ" onchange="updateObjekRotasiManual()" style="width: 50px;"></label>
+      </div>
     </div>
 
-    <div id="viewport">
-      <div class="phase-bar">
-        <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
-        <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
-        <button id="faseUji" class="btn-phase" onclick="setFase('uji')">3. Uji Gempa</button>
-      </div>
-
-      <div class="rotation-tooltip" id="rotationTooltip">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
-
-      <div class="transform-toggle-box">
-        <button class="btn-toggle-gizmo active" id="btnToggleTranslate" onclick="setGizmoActiveMode('translate')">↔️ Panduan Geser</button>
-        <button class="btn-toggle-gizmo" id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">🔄 Panduan Rotasi</button>
-        <button class="btn-toggle-gizmo" id="btnToggleOff" onclick="setGizmoActiveMode('off')">🚫 Lepas Panduan</button>
-      </div>
-
-      <!-- Panel Control Pemotongan Tool -->
-      <div class="tool-overlay-panel" id="toolOverlayPanel">
-        <div class="tool-overlay-title">
-          <span id="toolOverlayIcon">🪚</span>
-          <span id="toolOverlayName">Kontrol Alat</span>
-        </div>
-
-        <div class="param-group">
-          <div class="param-row" id="rowToolDiameter" style="display: none;">
-            <label id="lblToolDiameter">Diameter (d):</label>
-            <input type="number" id="toolDiameter" value="1" min="0.5" max="10" step="0.5" oninput="updateAlatTransform()">
-          </div>
-
-          <div class="param-row">
-            <label>Kedalaman:</label>
-            <input type="number" id="toolDepth" value="4" min="1" max="30" oninput="updateAlatTransform()">
-          </div>
-        </div>
-
-        <button class="btn-cut" onclick="eksekusiPemotongan()">⚡ Eksekusi Pemotongan</button>
-      </div>
-
+    <!-- Modus Gizmo -->
+    <div style="margin-top: 15px; border-top: 1px solid #444; padding-top: 10px;">
+      <button id="btnToggleTranslate" class="active" onclick="setGizmoActiveMode('translate')">Move</button>
+      <button id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">Rotate</button>
+      <button id="btnToggleOff" onclick="setGizmoActiveMode('off')">Off</button>
+      <button onclick="bersihkanAreaKerja()" style="background: #a22; color: #fff; float: right;">Kosongkan</button>
     </div>
   </div>
 
+  <!-- Overlay Panel Alat -->
+  <div id="toolOverlayPanel" style="display: none; position: absolute; bottom: 20px; right: 20px; background: rgba(20,20,25,0.9); color: #fff; padding: 15px; border-radius: 8px; width: 260px; font-family: sans-serif; z-index: 10;">
+    <h4 style="margin: 0 0 10px 0;"><span id="toolOverlayIcon">🪛</span> <span id="toolOverlayName">Kontrol Alat</span></h4>
+    
+    <div id="rowToolDiameter" style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+      <label id="lblToolDiameter">Diameter Alat:</label>
+      <input type="number" id="toolDiameter" value="2" min="0.5" step="0.5" onchange="updateAlatTransform()" style="width: 60px;">
+    </div>
+
+    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+      <label>Kedalaman Potong:</label>
+      <input type="number" id="toolDepth" value="6" min="1" step="0.5" onchange="updateAlatTransform()" style="width: 60px;">
+    </div>
+
+    <button onclick="eksekusiPemotongan()" style="width: 100%; background: #28a745; color: white; padding: 8px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer;">Eksekusi Pemotongan</button>
+    
+    <div id="hintBoxText" style="font-size: 0.8em; color: #aaa; margin-top: 10px;">💡 Klik permukaan kayu untuk menempatkan alat.</div>
+  </div>
+
+  <!-- MUAT SCRIPT CSG TERLEBIH DAHULU SEBELUM APP.JS -->
+  <script src="js/csg.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
