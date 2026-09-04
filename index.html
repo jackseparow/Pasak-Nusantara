@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geoblock - Pasak Nusantara 3D</title>
   
-  <!-- Three.js, OrbitControls, DragControls, & Three-CSG -->
+  <!-- Three.js, OrbitControls, & TransformControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DragControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/manthrax/THREE-CSGMesh@v1.0.0/ThreeCSG.js"></script>
 
   <style>
@@ -185,6 +185,33 @@
 
     .btn-phase.active { background: #2a5298; color: #fff; }
 
+    /* Overlay Mode Gizmo Indikator */
+    .transform-mode-bar {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      background: rgba(25, 25, 35, 0.9);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #4a82e8;
+      z-index: 5;
+    }
+
+    .btn-gizmo {
+      background: #1a1a24;
+      border: 1px solid #3b3b52;
+      color: #ccc;
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-gizmo.active { background: #4a82e8; color: #fff; }
+
     .tool-overlay-panel {
       position: absolute;
       top: 16px;
@@ -311,7 +338,7 @@
       </div>
 
       <div class="hint-box">
-        💡 <strong>Tips:</strong> Klik item yang sama untuk membatalkan pilihan (deselect). Geser benda kerja secara langsung untuk menyusun perakitan.
+        🕹️ <strong>Mode Manipulasi 3D:</strong> Gunakan panel tombol di bawah layar untuk mengganti antara mode <em>Geser (Translate)</em> dan <em>Putar (Rotate)</em> pada kayu/alat yang sedang aktif.
       </div>
 
     </div>
@@ -323,6 +350,13 @@
         <button id="faseUji" class="btn-phase" onclick="setFase('uji')">3. Uji Gempa</button>
       </div>
 
+      <!-- Control Gizmo Mode (Geser / Putar) -->
+      <div class="transform-mode-bar">
+        <button class="btn-gizmo active" id="btnModeTranslate" onclick="setGizmoMode('translate')">↔️ Mode Geser</button>
+        <button class="btn-gizmo" id="btnModeRotate" onclick="setGizmoMode('rotate')">🔄 Mode Putar</button>
+      </div>
+
+      <!-- Panel Floating Alat CSG -->
       <div class="tool-overlay-panel" id="toolOverlayPanel">
         <div class="tool-overlay-title">
           <span id="toolOverlayIcon">🪚</span>
@@ -331,21 +365,9 @@
 
         <div class="param-group">
           <div class="param-row">
-            <label>Sudut X (°):</label>
-            <input type="number" id="toolRotX" value="0" min="-180" max="180" oninput="updateAlatTransform()">
-          </div>
-          <div class="param-row">
-            <label>Sudut Y (°):</label>
-            <input type="number" id="toolRotY" value="0" min="-180" max="180" oninput="updateAlatTransform()">
-          </div>
-          <div class="param-row">
             <label>Kedalaman:</label>
             <input type="number" id="toolDepth" value="4" min="1" max="20" oninput="updateAlatTransform()">
           </div>
-        </div>
-
-        <div style="font-size: 0.7rem; color: #888; margin-top: 6px;" id="targetCoordLabel">
-          Target: (0, 0, 0)
         </div>
 
         <button class="btn-cut" onclick="eksekusiPemotongan()">⚡ Eksekusi Pemotongan</button>
