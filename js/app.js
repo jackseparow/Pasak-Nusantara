@@ -260,11 +260,11 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik koordinat permukaan kayu untuk menempelkan mata pahat.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Menghasilkan lubang persegi <strong>(2d × 2d)</strong> searah mata pahat.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Klik koordinat permukaan kayu untuk menempelkan mata bor.";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Menghasilkan lubang lingkaran murni bermeter D.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan bilah gergaji.";
@@ -490,60 +490,63 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMOTONGAN VOXEL DENGAN TRANSFORMASI MATRIKS LOKAL ALAT (SEJAJAR 100% SEARAH MATA POTONG) --- */
+/* --- PEMOTONGAN VOXEL MATEMATIS PRESISI (LINGKARAN BOR + ORIENTASI PAHAT SEJAJAR) --- */
 function prosesPemotonganVoxelFisik(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // Matriks Dunia Alat untuk Transformasi Koordinat Terbalik (Inverse World Matrix)
+  // Matriks Dunia Alat Terbalik (Inverse Tool Matrix) untuk Memetakan Voxel ke Tool Space
   toolGroup.updateMatrixWorld();
   const inverseToolMatrix = new THREE.Matrix4().copy(toolGroup.matrixWorld).invert();
 
-  let radius = valDiameter / 2;
-  if (activeAlat === 'pahat') radius = valDiameter;
+  const radiusBor = valDiameter / 2; // Radius Lingkaran Bor
+  const setengahPahat = valDiameter; // Setengah Sisi Persegi Pahat (2d x 2d)
 
   const toRemove = [];
 
   targetObj.voxelsGroup.children.forEach(voxel => {
-    // 1. Dapatkan posisi Dunia setiap voxel kayu
+    // 1. Dapatkan posisi Dunia (World) dari voxel
     const voxelWorldPos = new THREE.Vector3();
     voxel.getWorldPosition(voxelWorldPos);
 
-    // 2. Transformasikan posisi voxel ke Sistem Koordinat LOKAL ALAT
+    // 2. Petakan posisi voxel ke Koordinat Lokal Alat (Tool Space)
     const voxelInToolSpace = voxelWorldPos.clone().applyMatrix4(inverseToolMatrix);
 
-    // Di dalam Tool Space:
-    // Sumbu Y positif = ke arah atas gagang alat
-    // Sumbu Y negatif = arah menusuk ke dalam kayu (kedalaman potong)
-    // Sumbu X & Z = penampang horizontal mata potong
+    // Di Tool Space:
+    // -Y = Arah menusuk kedalaman potong
+    // X & Z = Penampang potong mata alat
+    const depthIn = -voxelInToolSpace.y;
 
-    const depthIn = -voxelInToolSpace.y; // Kedalaman penetrasi alat ke kayu
-    const distHorizontal = Math.sqrt(voxelInToolSpace.x * voxelInToolSpace.x + voxelInToolSpace.z * voxelInToolSpace.z);
-
-    // 3. Evaluasi Penghapusan Voxel berdasarkan Sumbu Lokal Alat murni
-    if (depthIn >= -0.3 && depthIn <= valDepthInput) {
+    // Evaluasi Kedalaman Potong
+    if (depthIn >= -0.2 && depthIn <= valDepthInput) {
+      
       if (activeAlat === 'bor') {
-        if (distHorizontal <= radius) {
+        // PERBAIKAN 1: BENTUK LINGKARAN MURNI BERDASARKAN PERSAMAAN EUCLIDEAN r^2 = x^2 + z^2
+        const distRadial = Math.sqrt(voxelInToolSpace.x * voxelInToolSpace.x + voxelInToolSpace.z * voxelInToolSpace.z);
+        if (distRadial <= radiusBor) {
           toRemove.push(voxel);
         }
+
       } else if (activeAlat === 'pahat') {
-        if (Math.abs(voxelInToolSpace.x) <= radius && Math.abs(voxelInToolSpace.z) <= radius) {
+        // PERBAIKAN 2: ORIENTASI PERSEGI (2d x 2d) SEJAJAR PENUH DENGAN ROTASI KEPALA PAHAT
+        if (Math.abs(voxelInToolSpace.x) <= setengahPahat && Math.abs(voxelInToolSpace.z) <= setengahPahat) {
           toRemove.push(voxel);
         }
+
       } else { // Gergaji
         let targetSpan = 15;
         if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
           const b = bendaKerjaList[selectedObjIndex];
           targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
         }
-        if (Math.abs(voxelInToolSpace.x) <= 0.6 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
+        if (Math.abs(voxelInToolSpace.x) <= 0.5 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
           toRemove.push(voxel);
         }
       }
     }
   });
 
-  // Hapus Voxel Terpotong
+  // Hapus Voxel Terpotong dari Scene
   toRemove.forEach(v => {
     targetObj.voxelsGroup.remove(v);
     v.geometry.dispose();
@@ -717,7 +720,7 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
-/* --- GENERATOR VOXEL MURNI --- */
+/* --- GENERATOR VOXEL DENSITAS TINGGI --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -727,7 +730,7 @@ function updateObjekMesh(item) {
   item.voxelsGroup = new THREE.Group();
   group.add(item.voxelsGroup);
 
-  const voxelSize = 0.8;
+  const voxelSize = 0.5; // Densitas ditingkatkan agar bentuk silinder/persegi makin halus
   const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
   const woodMat = new THREE.MeshStandardMaterial({
     color: 0xc28e0e,
