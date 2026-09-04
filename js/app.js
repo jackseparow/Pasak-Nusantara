@@ -15,6 +15,9 @@ let mouse = new THREE.Vector2();
 let currentHitPoint = new THREE.Vector3();
 let currentHitNormal = new THREE.Vector3(0, 1, 0);
 
+// Helper Visual Koordinat & Ruler
+let objectBoundingHelper = null;
+
 // Partikel Tahi Kayu
 let particleSystems = [];
 let isCuttingAnimation = false;
@@ -260,11 +263,11 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik permukaan kayu untuk menempelkan mata pahat persegi <strong>(2d × 2d)</strong>.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik koordinat permukaan kayu untuk menempelkan mata pahat.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Klik permukaan kayu untuk menempelkan mata bor silinder <strong>(Diameter D)</strong>.";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Klik koordinat permukaan kayu untuk menempelkan mata bor.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan bilah gergaji.";
@@ -383,7 +386,7 @@ function updateAlatTransform() {
   }
 }
 
-/* --- TANGKAP KLIK SELEKSI --- */
+/* --- TANGKAP KLIK SELEKSI & PENEMPATAN ALAT --- */
 function onViewportClick(event) {
   if (event.target.tagName !== 'CANVAS' || transformControl.dragging || isCuttingAnimation) return;
 
@@ -490,46 +493,57 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMOTONGAN VOXEL FISIK (PASTI BERLUBANG 100% NYATA) --- */
+/* --- PEMOTONGAN VOXEL DENGAN ORIENTASI SEJAJAR SUMBU ALAT --- */
 function prosesPemotonganVoxelFisik(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  const toolPosLocal = targetObj.group.worldToLocal(toolGroup.position.clone());
+  const toolWorldPos = toolGroup.position.clone();
+  const toolQuat = toolGroup.quaternion.clone();
 
-  // Buat bounding box alat dalam koordinat lokal
+  // Sumbu vektor masuk bor/pahat (-Y lokal alat)
+  const toolDir = new THREE.Vector3(0, -1, 0).applyQuaternion(toolQuat).normalize();
+
   let radius = valDiameter / 2;
-  if (activeAlat === 'pahat') radius = valDiameter; // ukuran persegi
-  
+  if (activeAlat === 'pahat') radius = valDiameter;
+
   const toRemove = [];
 
   targetObj.voxelsGroup.children.forEach(voxel => {
-    const vPos = voxel.position;
-    
-    // Proyeksi jarak voxel terhadap posisi ujung alat
-    const dx = vPos.x - toolPosLocal.x;
-    const dy = vPos.y - toolPosLocal.y;
-    const dz = vPos.z - toolPosLocal.z;
+    // Dapatkan posisi voxel di ruang Dunia (World Space)
+    const voxelWorldPos = new THREE.Vector3();
+    voxel.getWorldPosition(voxelWorldPos);
 
-    // Hitung jarak radial dan kedalaman
-    const distHorizontal = Math.sqrt(dx * dx + dz * dz);
+    // Vektor jarak dari titik klik ujung bor ke voxel
+    const vecToVoxel = voxelWorldPos.clone().sub(toolWorldPos);
 
-    if (activeAlat === 'bor') {
-      if (distHorizontal <= radius && dy <= 0.2 && dy >= -valDepthInput) {
-        toRemove.push(voxel);
-      }
-    } else if (activeAlat === 'pahat') {
-      if (Math.abs(dx) <= radius && Math.abs(dz) <= radius && dy <= 0.2 && dy >= -valDepthInput) {
-        toRemove.push(voxel);
-      }
-    } else { // Gergaji
-      if (Math.abs(dx) <= 0.8 && Math.abs(dz) <= targetObj.l && dy <= 0.2 && dy >= -valDepthInput) {
-        toRemove.push(voxel);
+    // Proyeksi jarak sepanjang sumbu mata bor (kedalaman masuk)
+    const projDepth = vecToVoxel.dot(toolDir);
+
+    // Komponen tegak lurus (Jarak radial dari sumbu bor)
+    const vecPerp = vecToVoxel.clone().sub(toolDir.clone().multiplyScalar(projDepth));
+    const perpDist = vecPerp.length();
+
+    // EKSEKUSI PENAMBATAN ORIENTASI:
+    // Hapus voxel HANYA jika berada dalam radius bor DAN dalam rentang kedalaman potong (projDepth >= 0 && projDepth <= valDepthInput)
+    if (projDepth >= -0.2 && projDepth <= valDepthInput) {
+      if (activeAlat === 'bor') {
+        if (perpDist <= radius) {
+          toRemove.push(voxel);
+        }
+      } else if (activeAlat === 'pahat') {
+        if (Math.abs(vecPerp.x) <= radius && Math.abs(vecPerp.z) <= radius) {
+          toRemove.push(voxel);
+        }
+      } else { // Gergaji
+        if (perpDist <= 0.8) {
+          toRemove.push(voxel);
+        }
       }
     }
   });
 
-  // Hapus voxel yang terkena pemotongan
+  // Hapus Voxel Terpotong
   toRemove.forEach(v => {
     targetObj.voxelsGroup.remove(v);
     v.geometry.dispose();
@@ -540,18 +554,36 @@ function prosesPemotonganVoxelFisik(targetObj) {
   rebuildOverlays(targetObj);
 }
 
-/* --- OVERLAY STRIMIN WIREFRAME --- */
+/* --- MEMBUAT KOORDINAT TERLIHAT (GRID LOKAL + BOUNDING RULER) --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
-    if (child instanceof THREE.AxesHelper || child.isStrimin) {
+    if (child instanceof THREE.AxesHelper || child.isRulerOverlay) {
       toRemove.push(child);
     }
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  const objectAxes = new THREE.AxesHelper(Math.max(item.t * 0.3, 6));
+  // 1. Sumbu Koordinat Lokal Kayu (X:Merah, Y:Hijau, Z:Biru)
+  const objectAxes = new THREE.AxesHelper(Math.max(item.t * 0.4, 8));
+  objectAxes.isRulerOverlay = true;
   item.group.add(objectAxes);
+
+  // 2. Grid Bounding Box Neon & Skala Ukuran
+  if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex] === item) {
+    let sizeX = item.jenis === 'balok' ? item.p : item.t;
+    let sizeY = item.jenis === 'balok' ? item.t : item.p;
+    let sizeZ = item.jenis === 'balok' ? item.l : item.t;
+
+    const boxGeo = new THREE.BoxGeometry(sizeX, sizeY, sizeZ);
+    const boxEdges = new THREE.EdgesGeometry(boxGeo);
+    const boxLineMat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 });
+    const boundingBoxLine = new THREE.LineSegments(boxEdges, boxLineMat);
+    
+    boundingBoxLine.position.set(0, sizeY / 2, 0);
+    boundingBoxLine.isRulerOverlay = true;
+    item.group.add(boundingBoxLine);
+  }
 }
 
 /* --- MANAJEMEN BENDA KERJA --- */
@@ -609,6 +641,9 @@ function pilihBendaKerja(index) {
   const groupBalok = document.getElementById('groupBalokDim');
   const groupSilinder = document.getElementById('groupSilinderDim');
 
+  // Bersihkan overlay lama pada semua objek
+  bendaKerjaList.forEach(b => rebuildOverlays(b));
+
   if (selectedObjIndex >= 0 && selectedObjIndex < bendaKerjaList.length) {
     const item = bendaKerjaList[selectedObjIndex];
 
@@ -634,6 +669,7 @@ function pilihBendaKerja(index) {
     controlsDiv.style.display = 'block';
 
     if (!item.voxelsGroup) updateObjekMesh(item);
+    rebuildOverlays(item);
     refreshGizmoTarget();
   } else {
     controlsDiv.style.display = 'none';
@@ -682,7 +718,7 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
-/* --- MEMBUAT KAYU BERBASIS VOXEL 3D FISIK --- */
+/* --- GENERATOR VOXEL MURNI --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -718,7 +754,6 @@ function updateObjekMesh(item) {
     }
   } else { // Silinder
     const radius = item.t / 2;
-    const halfP = item.p / 2;
 
     for (let x = -radius; x < radius; x += voxelSize) {
       for (let z = -radius; z < radius; z += voxelSize) {
