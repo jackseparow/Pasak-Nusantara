@@ -354,9 +354,8 @@ function create3DTool(positionPoint = null, normalVector = null) {
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
 
-    // KUNCI ORIENTASI: Vektor normal menunjuk ke luar kayu. 
-    // Menyandarkan sumbu Y positif alat pada Vektor Normal membuat badan alat berdiri di LUAR kayu 
-    // dan mata pisau menempel tepat di kulit luar kayu.
+    // DENGAN (0,0,0) DI LOKASI MATA ALAT:
+    // Menempelkan tegak lurus pada bidang kerja aktif
     const up = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
@@ -438,9 +437,12 @@ function eksekusiPemotongan() {
   transformControl.detach();
 
   const startPos = toolGroup.position.clone();
-  const startRot = toolGroup.rotation.clone();
+  const startRot = toolGroup.quaternion.clone();
   let startTime = performance.now();
   const duration = 1200;
+
+  // Sumbu Y Lokal Alat untuk Rotasi Presisi Bor
+  const localYAxis = new THREE.Vector3(0, 1, 0);
 
   function animateToolAction(now) {
     const elapsed = now - startTime;
@@ -451,19 +453,21 @@ function eksekusiPemotongan() {
     }
 
     if (activeAlat === 'bor') {
-      toolGroup.rotation.y = startRot.y + progress * Math.PI * 20;
-      // Animasi gerak masuk menembus kayu
-      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
+      // 1. ROTASI BOR PADA SUMBU LOKAL (Sempurna di semua kemiringan bidang)
+      toolGroup.quaternion.copy(startRot);
+      toolGroup.rotateOnAxis(localYAxis, progress * Math.PI * 20);
+
+      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'gergaji') {
       const stroke = Math.sin(progress * Math.PI * 10) * 3;
-      const forwardVec = new THREE.Vector3(0, 0, stroke).applyQuaternion(toolGroup.quaternion);
+      const forwardVec = new THREE.Vector3(0, 0, stroke).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(forwardVec);
 
     } else if (activeAlat === 'pahat') {
       const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
-      const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(toolGroup.quaternion);
+      const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(hammerVec);
     }
 
@@ -471,7 +475,7 @@ function eksekusiPemotongan() {
       requestAnimationFrame(animateToolAction);
     } else {
       toolGroup.position.copy(startPos);
-      toolGroup.rotation.copy(startRot);
+      toolGroup.quaternion.copy(startRot);
 
       prosesCutterVisualResult(targetObj);
       isCuttingAnimation = false;
@@ -482,34 +486,24 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA FISIK (MURNI MENEMBUS KE DALAM BAHAN) --- */
+/* --- HASIL RONGGA FISIK BERLUBANG (TIDAK AKAN MENONJOL JIKA TEMBUS) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
   const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
 
-  let cutMesh;
-  const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x5a3210, // Cokelat tua serat internal kayu
-    roughness: 0.9,
-    metalness: 0.0
-  });
+  let holeGeo;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    const holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    // KUNCI KEDALAMAN: Geometri digeser -valDepth/2 agar rute potongan murni menembus KE DALAM bahan
+    holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     holeGeo.translate(0, -valDepth / 2, 0);
-
-    cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
-    const holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
+    holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     holeGeo.translate(0, -valDepth / 2, 0);
-
-    cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else {
     let targetSpan = 12;
@@ -519,12 +513,19 @@ function prosesCutterVisualResult(targetObj) {
       targetSpan = targetObj.t * 1.02;
     }
 
-    const holeGeo = new THREE.BoxGeometry(0.5, valDepth, targetSpan);
+    holeGeo = new THREE.BoxGeometry(0.5, valDepth, targetSpan);
     holeGeo.translate(0, -valDepth / 2, 0);
-
-    cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   }
 
+  // Material Dinding Rongga Dalam Kayu (DoubleSide & BackSide Rendering agar tampak bolong asli)
+  const innerWoodMat = new THREE.MeshStandardMaterial({
+    color: 0x3d2008, // Cokelat kayu gelap berlubang
+    roughness: 0.9,
+    metalness: 0.0,
+    side: THREE.BackSide
+  });
+
+  const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   cutMesh.position.copy(localHitPos);
   
   cutMesh.quaternion.copy(toolGroup.quaternion);
@@ -533,7 +534,8 @@ function prosesCutterVisualResult(targetObj) {
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  const cutEdges = new THREE.EdgesGeometry(cutMesh.geometry);
+  // Outlines Garis Batas Lubang Oranye
+  const cutEdges = new THREE.EdgesGeometry(holeGeo);
   const cutLineMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
   cutMesh.add(cutLineSegments);
