@@ -259,12 +259,12 @@ function toggleAlat(alat) {
     
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
-      lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Menghasilkan lubang persegi <strong>(2d × 2d)</strong> searah mata pahat.";
+      lblDiameter.innerText = "Lebar Pahat (d):";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Menghasilkan lubang persegi <strong>(d × d)</strong> searah orientasi pahat.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Menghasilkan lubang lingkaran murni bermeter D.";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Menghasilkan lubang silinder melingkar murni (Diameter D).";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan bilah gergaji.";
@@ -315,7 +315,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(head);
 
   } else if (activeAlat === 'pahat') {
-    const sideSize = valDiameter * 2;
+    const sideSize = valDiameter; // Ukuran penampang pahat d x d
     
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     chiselGeo.translate(0, valDepth / 2, 0);
@@ -490,45 +490,38 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMOTONGAN VOXEL MATEMATIS PRESISI (LINGKARAN BOR + ORIENTASI PAHAT SEJAJAR) --- */
+/* --- PEMOTONGAN VOXEL MATEMATIS KOREKSI PAHAT (d x d) DAN LINGKARAN BOR LENGKUNG --- */
 function prosesPemotonganVoxelFisik(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // Matriks Dunia Alat Terbalik (Inverse Tool Matrix) untuk Memetakan Voxel ke Tool Space
   toolGroup.updateMatrixWorld();
   const inverseToolMatrix = new THREE.Matrix4().copy(toolGroup.matrixWorld).invert();
 
-  const radiusBor = valDiameter / 2; // Radius Lingkaran Bor
-  const setengahPahat = valDiameter; // Setengah Sisi Persegi Pahat (2d x 2d)
+  const radiusBor = valDiameter / 2;       // Radius Lingkaran Bor
+  const setengahPahat = valDiameter / 2;   // KOREKSI 1: Penampang Pahat Tepat d x d (Setengah Sisi = d/2)
 
   const toRemove = [];
 
   targetObj.voxelsGroup.children.forEach(voxel => {
-    // 1. Dapatkan posisi Dunia (World) dari voxel
     const voxelWorldPos = new THREE.Vector3();
     voxel.getWorldPosition(voxelWorldPos);
 
-    // 2. Petakan posisi voxel ke Koordinat Lokal Alat (Tool Space)
+    // Transformasi posisi voxel ke Tool Space
     const voxelInToolSpace = voxelWorldPos.clone().applyMatrix4(inverseToolMatrix);
-
-    // Di Tool Space:
-    // -Y = Arah menusuk kedalaman potong
-    // X & Z = Penampang potong mata alat
     const depthIn = -voxelInToolSpace.y;
 
-    // Evaluasi Kedalaman Potong
-    if (depthIn >= -0.2 && depthIn <= valDepthInput) {
+    if (depthIn >= -0.25 && depthIn <= valDepthInput) {
       
       if (activeAlat === 'bor') {
-        // PERBAIKAN 1: BENTUK LINGKARAN MURNI BERDASARKAN PERSAMAAN EUCLIDEAN r^2 = x^2 + z^2
+        // KOREKSI 2: FORMULA LINGKARAN EUCLIDEAN KURVA HALUS (r = sqrt(x^2 + z^2) <= D/2)
         const distRadial = Math.sqrt(voxelInToolSpace.x * voxelInToolSpace.x + voxelInToolSpace.z * voxelInToolSpace.z);
         if (distRadial <= radiusBor) {
           toRemove.push(voxel);
         }
 
       } else if (activeAlat === 'pahat') {
-        // PERBAIKAN 2: ORIENTASI PERSEGI (2d x 2d) SEJAJAR PENUH DENGAN ROTASI KEPALA PAHAT
+        // KOREKSI 1: PERSEGI EXACT (d x d) SEJAJAR ORIENTASI BILAH PAHAT
         if (Math.abs(voxelInToolSpace.x) <= setengahPahat && Math.abs(voxelInToolSpace.z) <= setengahPahat) {
           toRemove.push(voxel);
         }
@@ -539,14 +532,13 @@ function prosesPemotonganVoxelFisik(targetObj) {
           const b = bendaKerjaList[selectedObjIndex];
           targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
         }
-        if (Math.abs(voxelInToolSpace.x) <= 0.5 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
+        if (Math.abs(voxelInToolSpace.x) <= 0.4 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
           toRemove.push(voxel);
         }
       }
     }
   });
 
-  // Hapus Voxel Terpotong dari Scene
   toRemove.forEach(v => {
     targetObj.voxelsGroup.remove(v);
     v.geometry.dispose();
@@ -567,12 +559,10 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // Sumbu Koordinat Lokal Kayu
   const objectAxes = new THREE.AxesHelper(Math.max(item.t * 0.4, 8));
   objectAxes.isRulerOverlay = true;
   item.group.add(objectAxes);
 
-  // Grid Bounding Box Neon & Skala Ukuran
   if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex] === item) {
     let sizeX = item.jenis === 'balok' ? item.p : item.t;
     let sizeY = item.jenis === 'balok' ? item.t : item.p;
@@ -720,7 +710,7 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
-/* --- GENERATOR VOXEL DENSITAS TINGGI --- */
+/* --- GENERATOR VOXEL HIGH DENSITY (UKURAN 0.3 UNTUK FORMULA LINGKARAN & PAHAT PRESISI) --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -730,7 +720,7 @@ function updateObjekMesh(item) {
   item.voxelsGroup = new THREE.Group();
   group.add(item.voxelsGroup);
 
-  const voxelSize = 0.5; // Densitas ditingkatkan agar bentuk silinder/persegi makin halus
+  const voxelSize = 0.3; // Resolusi voxel ditingkatkan ke 0.3 agar kurva bor bulat sempurna
   const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
   const woodMat = new THREE.MeshStandardMaterial({
     color: 0xc28e0e,
