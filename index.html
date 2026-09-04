@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geoblock - Pasak Nusantara 3D</title>
   
-  <!-- Three.js, OrbitControls, & DragControls -->
+  <!-- Three.js, OrbitControls, DragControls, & Three-CSG -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DragControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/manthrax/THREE-CSGMesh@v1.0.0/ThreeCSG.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -196,6 +197,7 @@
       backdrop-filter: blur(6px);
       z-index: 5;
       box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      display: none;
     }
 
     .tool-overlay-title {
@@ -270,7 +272,7 @@
         <div class="object-list" id="objectList"></div>
 
         <!-- Setting Objek Terpilih -->
-        <div id="selectedObjectControls" style="margin-top: 12px; border-top: 1px solid #333346; padding-top: 8px;">
+        <div id="selectedObjectControls" style="margin-top: 12px; border-top: 1px solid #333346; padding-top: 8px; display: none;">
           <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-bottom: 6px;">Atur Benda Kerja Terpilih</div>
           
           <div class="param-group">
@@ -293,15 +295,15 @@
       <div class="stock-section">
         <div class="stock-title">🛠️ Pilih Alat Pemahat</div>
         <div class="stock-grid">
-          <div class="stock-item active" id="item-gergaji" onclick="pilihAlat('gergaji')">
+          <div class="stock-item" id="item-gergaji" onclick="toggleAlat('gergaji')">
             <div class="stock-icon">🪚</div>
             <div class="stock-label">Gergaji</div>
           </div>
-          <div class="stock-item" id="item-pahat" onclick="pilihAlat('pahat')">
+          <div class="stock-item" id="item-pahat" onclick="toggleAlat('pahat')">
             <div class="stock-icon">🪛</div>
             <div class="stock-label">Pahat</div>
           </div>
-          <div class="stock-item" id="item-bor" onclick="pilihAlat('bor')">
+          <div class="stock-item" id="item-bor" onclick="toggleAlat('bor')">
             <div class="stock-icon">🔘</div>
             <div class="stock-label">Bor</div>
           </div>
@@ -309,7 +311,7 @@
       </div>
 
       <div class="hint-box">
-        ✋ <strong>Geser / Drag Objek:</strong> Klik & tahan kayu untuk memindahkannya. Terutama sangat berguna pada <em>Fase 2 (Pasang/Rakit)</em>.
+        💡 <strong>Tips:</strong> Klik item yang sama untuk membatalkan pilihan (deselect). Geser benda kerja secara langsung untuk menyusun perakitan.
       </div>
 
     </div>
