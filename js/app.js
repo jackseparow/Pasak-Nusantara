@@ -280,7 +280,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D (ORIENTASI BENAR MENANCAP KE KAYU) --- */
+/* --- MODEL ALAT 3D (MATA ALAT TEPAT MENEMPEL PADA TITIK KLIK) --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -293,13 +293,15 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const radius = valDiameter / 2;
     const tipHeight = 1.2;
 
+    // Kerucut Ujung Mata Bor Lancip (Titik Puncak berada tepat di (0,0,0))
     const tipGeo = new THREE.ConeGeometry(radius, tipHeight, 32);
-    tipGeo.rotateX(Math.PI);
+    tipGeo.rotateX(Math.PI); 
     tipGeo.translate(0, tipHeight / 2, 0);
 
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     const tipMesh = new THREE.Mesh(tipGeo, drillMat);
 
+    // Batang Silinder Bor
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     drillGeo.translate(0, tipHeight + (valDepth / 2), 0);
     const mainDrill = new THREE.Mesh(drillGeo, drillMat);
@@ -314,6 +316,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(head);
 
   } else if (activeAlat === 'pahat') {
+    // Mata Pahat Pipih (Bawah Pahat Tepat di titik (0,0,0))
     const sideSize = valDiameter * 2;
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     chiselGeo.translate(0, valDepth / 2, 0);
@@ -330,6 +333,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
+    // Bilah Gergaji (Bawah Bilah Tepat di titik (0,0,0))
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
     bladeGeo.translate(0, valDepth / 2, 0);
 
@@ -347,10 +351,15 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
-    // KUNCI PERBAIKAN ORIENTASI: Vektor asal adalah (0, 1, 0) agar alat berdiri tegak menancap permukaan kayu
+
+    // KUNCI PERBAIKAN ORIENTASI: 
+    // Normal permukaan dikalikan -1 agar badan alat berada di LUAR permukaan kayu,
+    // sementara UJUNG MATA ALAT di (0,0,0) menempel tepat di kulit kayu.
+    const inwardNormal = normalVector.clone().negate();
     const up = new THREE.Vector3(0, 1, 0);
-    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, inwardNormal);
     toolGroup.quaternion.copy(quaternion);
+
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
     toolGroup.position.y += 8;
@@ -442,7 +451,7 @@ function eksekusiPemotongan() {
 
     if (activeAlat === 'bor') {
       toolGroup.rotation.y = startRot.y + progress * Math.PI * 20;
-      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
+      const depthOffset = new THREE.Vector3(0, Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'gergaji') {
@@ -452,7 +461,7 @@ function eksekusiPemotongan() {
 
     } else if (activeAlat === 'pahat') {
       const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
-      const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(toolGroup.quaternion);
+      const hammerVec = new THREE.Vector3(0, hammer, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(hammerVec);
     }
 
@@ -480,7 +489,7 @@ function prosesCutterVisualResult(targetObj) {
 
   let cutMesh;
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x5a3210,
+    color: 0x5a3210, // Cokelat tua serat bagian dalam kayu
     roughness: 0.9,
     metalness: 0.0
   });
@@ -488,20 +497,20 @@ function prosesCutterVisualResult(targetObj) {
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
     const holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    holeGeo.translate(0, valDepth / 2, 0);
+    holeGeo.translate(0, -valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
     const holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
-    holeGeo.translate(0, valDepth / 2, 0);
+    holeGeo.translate(0, -valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else {
     const holeGeo = new THREE.BoxGeometry(0.5, valDepth, 40);
-    holeGeo.translate(0, valDepth / 2, 0);
+    holeGeo.translate(0, -valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   }
