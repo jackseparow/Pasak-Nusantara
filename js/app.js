@@ -33,9 +33,13 @@ function initThreeJS() {
   camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
   camera.position.set(35, 35, 45);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
+  
+  // KUNCI UTAMA: Aktifkan pemotongan fisik piksel 3D (Local Clipping)
+  renderer.localClippingEnabled = true;
+
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -482,12 +486,12 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA POTONGAN (POLYGON OFFSET & AUTO CLAMP: TAMPAK BERLUBANG & ANTI MENONJOL) --- */
+/* --- PEMOTONGAN FISIK ASLI MENGGUNAKAN LOCAL CLIPPING PLANES --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // 1. Deteksi ketebalan fisik bahan kayu pada bidang yang diklik
+  // 1. Deteksi tebal bahan kayu
   let maxThickness = 30;
   if (targetObj.jenis === 'balok') {
     const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
@@ -498,10 +502,25 @@ function prosesCutterVisualResult(targetObj) {
     maxThickness = targetObj.t;
   }
 
-  // 2. CLAMP KEDALAMAN: Mencegah hasil potong mencuat keluar dari fisik bahan
+  // 2. Kunci kedalaman maksimal agar tidak menonjol
   const effectiveDepth = Math.min(valDepthInput, maxThickness);
-  const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
 
+  // 3. BUAT BIDANG CLIPPER (CLIPPING PLANE) DI LOKASI ALAT
+  // Bidang ini secara fisik "memotong/menghilangkan" piksel kayu
+  const cutDirection = new THREE.Vector3(0, -1, 0).applyQuaternion(toolGroup.quaternion);
+  const cutPlane = new THREE.Plane();
+  cutPlane.setFromNormalAndCoplanarPoint(cutDirection, toolGroup.position);
+
+  // Terapkan bidang potong langsung ke Material Utama Kayu
+  if (!targetObj.mainMesh.material.clippingPlanes) {
+    targetObj.mainMesh.material.clippingPlanes = [];
+  }
+  targetObj.mainMesh.material.clippingPlanes.push(cutPlane);
+  targetObj.mainMesh.material.clipShadows = true;
+  targetObj.mainMesh.material.needsUpdate = true;
+
+  // 4. BUAT MESH RONGGA DALAM KAYU (TUTUP PEMOTONGAN / DINDING LUBANG)
+  const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
   let holeGeo;
 
   if (activeAlat === 'bor') {
@@ -526,15 +545,12 @@ function prosesCutterVisualResult(targetObj) {
     holeGeo.translate(0, -effectiveDepth / 2, 0);
   }
 
-  // 3. MATERIAL DENGAN POLYGON OFFSET & RENDERING DIPRIORITASKAN (JEJAK DIJAMIN KELIHATAN)
+  // Material Serat Dalam Kayu Cokelat Tua
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x1a0a02,            // Cokelat tua kedalaman kayu
-    roughness: 0.95,
+    color: 0x1f0f02,
+    roughness: 0.9,
     metalness: 0.0,
-    side: THREE.DoubleSide,     // Render permukaan dalam dan luar
-    polygonOffset: true,        // Memaksa penumpukan rendering di atas kayu
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -2
+    side: THREE.BackSide // Menggambarkan bagian dalam rongga potong
   });
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
@@ -543,12 +559,10 @@ function prosesCutterVisualResult(targetObj) {
   cutMesh.quaternion.copy(toolGroup.quaternion);
   cutMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
 
-  cutMesh.renderOrder = 99; // Memastikan GPU menggambar jejak potongan tanpa pernah tertutup
-
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Garis tepi batas potong neon oranye
+  // Penegas Garis Tepi Lubang (Warna Oranye)
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
   const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff7700, linewidth: 2 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
