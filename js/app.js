@@ -15,9 +15,6 @@ let mouse = new THREE.Vector2();
 let currentHitPoint = new THREE.Vector3();
 let currentHitNormal = new THREE.Vector3(0, 1, 0);
 
-// Helper Visual Koordinat & Ruler
-let objectBoundingHelper = null;
-
 // Partikel Tahi Kayu
 let particleSystems = [];
 let isCuttingAnimation = false;
@@ -493,16 +490,14 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMOTONGAN VOXEL DENGAN ORIENTASI SEJAJAR SUMBU ALAT --- */
+/* --- PEMOTONGAN VOXEL DENGAN TRANSFORMASI MATRIKS LOKAL ALAT (SEJAJAR 100% SEARAH MATA POTONG) --- */
 function prosesPemotonganVoxelFisik(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  const toolWorldPos = toolGroup.position.clone();
-  const toolQuat = toolGroup.quaternion.clone();
-
-  // Sumbu vektor masuk bor/pahat (-Y lokal alat)
-  const toolDir = new THREE.Vector3(0, -1, 0).applyQuaternion(toolQuat).normalize();
+  // Matriks Dunia Alat untuk Transformasi Koordinat Terbalik (Inverse World Matrix)
+  toolGroup.updateMatrixWorld();
+  const inverseToolMatrix = new THREE.Matrix4().copy(toolGroup.matrixWorld).invert();
 
   let radius = valDiameter / 2;
   if (activeAlat === 'pahat') radius = valDiameter;
@@ -510,33 +505,38 @@ function prosesPemotonganVoxelFisik(targetObj) {
   const toRemove = [];
 
   targetObj.voxelsGroup.children.forEach(voxel => {
-    // Dapatkan posisi voxel di ruang Dunia (World Space)
+    // 1. Dapatkan posisi Dunia setiap voxel kayu
     const voxelWorldPos = new THREE.Vector3();
     voxel.getWorldPosition(voxelWorldPos);
 
-    // Vektor jarak dari titik klik ujung bor ke voxel
-    const vecToVoxel = voxelWorldPos.clone().sub(toolWorldPos);
+    // 2. Transformasikan posisi voxel ke Sistem Koordinat LOKAL ALAT
+    const voxelInToolSpace = voxelWorldPos.clone().applyMatrix4(inverseToolMatrix);
 
-    // Proyeksi jarak sepanjang sumbu mata bor (kedalaman masuk)
-    const projDepth = vecToVoxel.dot(toolDir);
+    // Di dalam Tool Space:
+    // Sumbu Y positif = ke arah atas gagang alat
+    // Sumbu Y negatif = arah menusuk ke dalam kayu (kedalaman potong)
+    // Sumbu X & Z = penampang horizontal mata potong
 
-    // Komponen tegak lurus (Jarak radial dari sumbu bor)
-    const vecPerp = vecToVoxel.clone().sub(toolDir.clone().multiplyScalar(projDepth));
-    const perpDist = vecPerp.length();
+    const depthIn = -voxelInToolSpace.y; // Kedalaman penetrasi alat ke kayu
+    const distHorizontal = Math.sqrt(voxelInToolSpace.x * voxelInToolSpace.x + voxelInToolSpace.z * voxelInToolSpace.z);
 
-    // EKSEKUSI PENAMBATAN ORIENTASI:
-    // Hapus voxel HANYA jika berada dalam radius bor DAN dalam rentang kedalaman potong (projDepth >= 0 && projDepth <= valDepthInput)
-    if (projDepth >= -0.2 && projDepth <= valDepthInput) {
+    // 3. Evaluasi Penghapusan Voxel berdasarkan Sumbu Lokal Alat murni
+    if (depthIn >= -0.3 && depthIn <= valDepthInput) {
       if (activeAlat === 'bor') {
-        if (perpDist <= radius) {
+        if (distHorizontal <= radius) {
           toRemove.push(voxel);
         }
       } else if (activeAlat === 'pahat') {
-        if (Math.abs(vecPerp.x) <= radius && Math.abs(vecPerp.z) <= radius) {
+        if (Math.abs(voxelInToolSpace.x) <= radius && Math.abs(voxelInToolSpace.z) <= radius) {
           toRemove.push(voxel);
         }
       } else { // Gergaji
-        if (perpDist <= 0.8) {
+        let targetSpan = 15;
+        if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
+          const b = bendaKerjaList[selectedObjIndex];
+          targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
+        }
+        if (Math.abs(voxelInToolSpace.x) <= 0.6 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
           toRemove.push(voxel);
         }
       }
@@ -554,7 +554,7 @@ function prosesPemotonganVoxelFisik(targetObj) {
   rebuildOverlays(targetObj);
 }
 
-/* --- MEMBUAT KOORDINAT TERLIHAT (GRID LOKAL + BOUNDING RULER) --- */
+/* --- KOORDINAT TERLIHAT (GRID LOKAL + BOUNDING RULER) --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -564,12 +564,12 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // 1. Sumbu Koordinat Lokal Kayu (X:Merah, Y:Hijau, Z:Biru)
+  // Sumbu Koordinat Lokal Kayu
   const objectAxes = new THREE.AxesHelper(Math.max(item.t * 0.4, 8));
   objectAxes.isRulerOverlay = true;
   item.group.add(objectAxes);
 
-  // 2. Grid Bounding Box Neon & Skala Ukuran
+  // Grid Bounding Box Neon & Skala Ukuran
   if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex] === item) {
     let sizeX = item.jenis === 'balok' ? item.p : item.t;
     let sizeY = item.jenis === 'balok' ? item.t : item.p;
@@ -641,7 +641,6 @@ function pilihBendaKerja(index) {
   const groupBalok = document.getElementById('groupBalokDim');
   const groupSilinder = document.getElementById('groupSilinderDim');
 
-  // Bersihkan overlay lama pada semua objek
   bendaKerjaList.forEach(b => rebuildOverlays(b));
 
   if (selectedObjIndex >= 0 && selectedObjIndex < bendaKerjaList.length) {
