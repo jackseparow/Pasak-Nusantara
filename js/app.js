@@ -67,7 +67,6 @@ function initThreeJS() {
   scene.add(dirLight);
 
   const gridHelper = new THREE.GridHelper(60, 60, 0x444455, 0x222233);
-  gridHelper.position.y = -0.01; // Mencegah Z-Fighting bercak warna pada alas kayu
   scene.add(gridHelper);
 
   const globalAxes = new THREE.AxesHelper(15);
@@ -422,7 +421,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- ANIMASI PEMOTONGAN ALAT (MASUK SEDALAM KEDALAMAN AKTUAL) --- */
+/* --- ANIMASI PEMOTONGAN ALAT --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat || isCuttingAnimation) {
     alert("Pilih benda kerja dan tempatkan alat pada kayu terlebih dahulu!");
@@ -435,27 +434,10 @@ function eksekusiPemotongan() {
   isCuttingAnimation = true;
   transformControl.detach();
 
-  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
-
-  // Hitung kedalaman efektif agar tidak melebihi tebal bahan
-  let maxThickness = 30;
-  if (targetObj.jenis === 'balok') {
-    const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
-    if (localNormal.y > 0.5) maxThickness = targetObj.t;
-    else if (localNormal.x > 0.5) maxThickness = targetObj.p;
-    else maxThickness = targetObj.l;
-  } else {
-    maxThickness = targetObj.t;
-  }
-
-  const effectiveDepth = Math.min(valDepthInput, maxThickness);
-
   const startPos = toolGroup.position.clone();
   const startRot = toolGroup.quaternion.clone();
   let startTime = performance.now();
-  const duration = 1400;
-
-  const localYAxis = new THREE.Vector3(0, 1, 0);
+  const duration = 1200;
 
   function animateToolAction(now) {
     const elapsed = now - startTime;
@@ -465,24 +447,22 @@ function eksekusiPemotongan() {
       triggerWoodSparks(toolGroup.position);
     }
 
-    // Vektor dorongan penembusan masuk searah sumbu Y negatif lokal alat
-    const pushDepth = Math.sin(progress * Math.PI) * effectiveDepth;
-    const depthVec = new THREE.Vector3(0, -pushDepth, 0).applyQuaternion(startRot);
-
     if (activeAlat === 'bor') {
       toolGroup.quaternion.copy(startRot);
-      toolGroup.rotateOnAxis(localYAxis, progress * Math.PI * 24);
-      toolGroup.position.copy(startPos).add(depthVec);
+      toolGroup.rotateY(progress * Math.PI * 20);
+
+      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(startRot);
+      toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'gergaji') {
-      const stroke = Math.sin(progress * Math.PI * 12) * 2;
+      const stroke = Math.sin(progress * Math.PI * 10) * 3;
       const forwardVec = new THREE.Vector3(0, 0, stroke).applyQuaternion(startRot);
-      toolGroup.position.copy(startPos).add(depthVec).add(forwardVec);
+      toolGroup.position.copy(startPos).add(forwardVec);
 
     } else if (activeAlat === 'pahat') {
-      const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 0.8;
+      const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
       const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(startRot);
-      toolGroup.position.copy(startPos).add(depthVec).add(hammerVec);
+      toolGroup.position.copy(startPos).add(hammerVec);
     }
 
     if (progress < 1.0) {
@@ -491,7 +471,7 @@ function eksekusiPemotongan() {
       toolGroup.position.copy(startPos);
       toolGroup.quaternion.copy(startRot);
 
-      prosesCutterVisualResult(targetObj, effectiveDepth);
+      prosesCutterVisualResult(targetObj);
       isCuttingAnimation = false;
       refreshGizmoTarget();
     }
@@ -500,24 +480,26 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA FISIK BERLUBANG TEMBUS (KONSISTEN & BERHASIL) --- */
-function prosesCutterVisualResult(targetObj, effectiveDepth) {
+/* --- HASIL RONGGA FISIK DASAR --- */
+function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
+  const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
+
   const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
 
   let holeGeo;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32, 1, true); // openEnded true agar berlubang tembus
-    holeGeo.translate(0, -effectiveDepth / 2, 0);
+    holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
+    holeGeo.translate(0, -valDepth / 2, 0);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
-    holeGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
-    holeGeo.translate(0, -effectiveDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
+    holeGeo.translate(0, -valDepth / 2, 0);
 
-  } else { // gergaji
+  } else {
     let targetSpan = 12;
     if (targetObj.jenis === 'balok') {
       targetSpan = targetObj.l * 1.02;
@@ -525,23 +507,17 @@ function prosesCutterVisualResult(targetObj, effectiveDepth) {
       targetSpan = targetObj.t * 1.02;
     }
 
-    holeGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
-    holeGeo.translate(0, -effectiveDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(0.5, valDepth, targetSpan);
+    holeGeo.translate(0, -valDepth / 2, 0);
   }
 
-  // Material Dinding Rongga Dalam Kayu dengan Depth Offset Negatif agar PASTI TERLIHAT
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x221104, // Warna cokelat kayu bagian dalam
-    roughness: 0.9,
-    metalness: 0.0,
-    side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    polygonOffsetUnits: -4
+    color: 0x3d2008,
+    roughness: 0.8,
+    metalness: 0.1
   });
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
-  cutMesh.renderOrder = 2; // Memastikan dirender setelah benda kerja utama
   cutMesh.position.copy(localHitPos);
   
   cutMesh.quaternion.copy(toolGroup.quaternion);
@@ -550,9 +526,8 @@ function prosesCutterVisualResult(targetObj, effectiveDepth) {
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Outline Garis Batas Oranye Penegas Rongga Fisik
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
-  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
+  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
   cutMesh.add(cutLineSegments);
 
@@ -727,11 +702,7 @@ function updateObjekMesh(item) {
     roughness: 0.6,
     metalness: 0.1,
     transparent: isTransparent,
-    opacity: item.opacity,
-    polygonOffset: true,
-    polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1,
-    side: THREE.DoubleSide
+    opacity: item.opacity
   });
 
   let height = item.t;
@@ -755,8 +726,7 @@ function updateObjekMesh(item) {
   const objectAxes = new THREE.AxesHelper(Math.max(height * 0.3, 6));
   group.add(objectAxes);
 
-  // Ketinggian alas disesuaikan sedikit (+0.01) agar bebas Z-Fighting bercak warna alas
-  group.position.y = (height / 2) + 0.01;
+  group.position.y = height / 2;
 }
 
 function setFase(fase) {
