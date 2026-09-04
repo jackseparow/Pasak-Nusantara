@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geoblock - Pasak Nusantara 3D</title>
   
+  <!-- Three.js & OrbitControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
@@ -20,7 +21,7 @@
       color: #fff;
     }
     
-    /* Header Identitas */
+    /* Header */
     header {
       background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
       padding: 10px 20px;
@@ -45,7 +46,7 @@
       padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 16px;
       border-right: 1px solid #2e2e3e;
       overflow-y: auto;
       user-select: none;
@@ -67,7 +68,6 @@
       letter-spacing: 0.5px;
     }
 
-    /* Grid Kartu Bahan & Alat */
     .stock-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -99,18 +99,9 @@
       background-color: #2a5298;
     }
 
-    .stock-icon {
-      font-size: 2rem;
-    }
+    .stock-icon { font-size: 1.8rem; }
+    .stock-label { font-size: 0.75rem; font-weight: 600; color: #ddd; text-align: center; }
 
-    .stock-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: #ddd;
-      text-align: center;
-    }
-
-    /* Panel Parameter Dimensi */
     .param-group {
       margin-top: 10px;
       display: flex;
@@ -140,7 +131,6 @@
       flex: 1;
       position: relative;
       background-color: #0d0d12;
-      cursor: crosshair; /* Kursor indikator pemahat */
     }
 
     /* Phase Bar Atas Canvas */
@@ -173,16 +163,25 @@
     .btn-phase.active { background: #2a5298; color: #fff; }
     .btn-phase.shake.active { background: #d9534f; }
 
-    /* Petunjuk Bantuan */
     .hint-box {
       font-size: 0.72rem;
       color: #aaa;
-      margin-top: 10px;
-      line-height: 1.3;
-      background: rgba(0, 0, 0, 0.2);
-      padding: 8px;
-      border-radius: 4px;
+      line-height: 1.35;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 10px;
+      border-radius: 6px;
+      border-left: 3px solid #4a82e8;
     }
+
+    .axis-legend {
+      font-size: 0.7rem;
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .axis-item { display: flex; align-items: center; gap: 6px; }
+    .axis-color { width: 10px; height: 10px; border-radius: 2px; }
   </style>
 </head>
 <body>
@@ -201,31 +200,33 @@
   <div class="main-container">
     <div id="stock-panel">
       
+      <!-- Panel Bahan -->
       <div class="stock-section">
         <div class="stock-title">📦 Stock Bahan</div>
         <div class="stock-grid">
-          <div class="stock-item active" id="item-balok" draggable="true" onclick="pilihBahan('balok')" ondragstart="dragStart(event, 'balok')">
+          <div class="stock-item active" id="item-balok" onclick="pilihBahan('balok')">
             <div class="stock-icon">🪵</div>
             <div class="stock-label">Balok Kayu</div>
           </div>
-          <div class="stock-item" id="item-silinder" draggable="true" onclick="pilihBahan('silinder')" ondragstart="dragStart(event, 'silinder')">
-            <div class="stock-icon">🪵</div>
+          <div class="stock-item" id="item-silinder" onclick="pilihBahan('silinder')">
+            <div class="stock-icon">🥢</div>
             <div class="stock-label">Silinder (Pasak)</div>
           </div>
         </div>
 
         <div id="formBalok" class="param-group">
-          <div class="param-row"><label>Panjang (X):</label><input type="number" id="balokP" value="10" min="2" max="30" onchange="updateBentuk()"></div>
-          <div class="param-row"><label>Lebar (Y):</label><input type="number" id="balokL" value="10" min="2" max="30" onchange="updateBentuk()"></div>
-          <div class="param-row"><label>Tinggi (Z):</label><input type="number" id="balokT" value="30" min="2" max="50" onchange="updateBentuk()"></div>
+          <div class="param-row"><label>Panjang (X):</label><input type="number" id="balokP" value="10" min="2" max="30" oninput="updateBentuk()"></div>
+          <div class="param-row"><label>Lebar (Z):</label><input type="number" id="balokL" value="10" min="2" max="30" oninput="updateBentuk()"></div>
+          <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="balokT" value="30" min="2" max="50" oninput="updateBentuk()"></div>
         </div>
 
         <div id="formSilinder" class="param-group" style="display:none;">
-          <div class="param-row"><label>Panjang (Z):</label><input type="number" id="silinderP" value="25" min="2" max="50" onchange="updateBentuk()"></div>
-          <div class="param-row"><label>Diameter (D):</label><input type="number" id="silinderD" value="6" min="1" max="20" onchange="updateBentuk()"></div>
+          <div class="param-row"><label>Panjang/Tinggi (Y):</label><input type="number" id="silinderP" value="25" min="2" max="50" oninput="updateBentuk()"></div>
+          <div class="param-row"><label>Diameter (D):</label><input type="number" id="silinderD" value="4" min="1" max="20" oninput="updateBentuk()"></div>
         </div>
       </div>
 
+      <!-- Panel Alat Pemahat -->
       <div class="stock-section">
         <div class="stock-title">🛠️ Stock Alat</div>
         <div class="stock-grid">
@@ -244,13 +245,20 @@
         </div>
       </div>
 
+      <!-- Panduan Sumbu -->
       <div class="hint-box">
-        💡 <strong>Cara Memahat:</strong> Pilih alat di atas, lalu klik langsung pada permukaan kayu di area 3D untuk memotong, memahat, atau mengebor.
+        📍 <strong>Sumbu Koordinat 3D:</strong>
+        <div class="axis-legend">
+          <div class="axis-item"><div class="axis-color" style="background:#00ff00;"></div> <span><strong>Sumbu Y:</strong> Vertikal / Tinggi</span></div>
+          <div class="axis-item"><div class="axis-color" style="background:#ff0000;"></div> <span><strong>Sumbu X:</strong> Horizontal / Panjang</span></div>
+          <div class="axis-item"><div class="axis-color" style="background:#0000ff;"></div> <span><strong>Sumbu Z:</strong> Kedalaman / Lebar</span></div>
+        </div>
       </div>
 
     </div>
 
-    <div id="viewport" ondragover="allowDrop(event)" ondrop="handleDrop(event)">
+    <!-- Viewport 3D Canvas -->
+    <div id="viewport">
       <div class="phase-bar">
         <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
         <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
