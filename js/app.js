@@ -1,10 +1,10 @@
-let scene, camera, renderer, controls, transformControls;
+let scene, camera, renderer, controls;
+let transformControlsTranslate, transformControlsRotate;
 let bendaKerjaList = [];
 let selectedObjIndex = -1;
 let jenisBahanBaru = 'balok';
 let activeAlat = null; 
 let activeFase = 'pahat';
-let currentGizmoMode = 'translate'; // 'translate' atau 'rotate'
 
 let toolGroup = null;
 let cutterGeometryMesh = null;
@@ -35,15 +35,25 @@ function initThreeJS() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  // Transform Controls (Gizmo Melayang untuk Geser & Putar)
-  transformControls = new THREE.TransformControls(camera, renderer.domElement);
-  transformControls.size = 0.85;
-  scene.add(transformControls);
+  // 1. TransformControls Mode Geser (Panah)
+  transformControlsTranslate = new THREE.TransformControls(camera, renderer.domElement);
+  transformControlsTranslate.setMode('translate');
+  transformControlsTranslate.size = 0.75;
+  scene.add(transformControlsTranslate);
 
-  // Matikan OrbitControls saat gizmo digerakkan pengguna
-  transformControls.addEventListener('dragging-changed', (event) => {
-    controls.enabled = !event.value;
-  });
+  // 2. TransformControls Mode Putar (Lingkaran Sudut)
+  transformControlsRotate = new THREE.TransformControls(camera, renderer.domElement);
+  transformControlsRotate.setMode('rotate');
+  transformControlsRotate.size = 0.75;
+  scene.add(transformControlsRotate);
+
+  // Nonaktifkan OrbitControls saat objek sedang diputar/digeser lewat mouse
+  const disableOrbit = (event) => { controls.enabled = !event.value; };
+  transformControlsTranslate.addEventListener('dragging-changed', disableOrbit);
+  transformControlsRotate.addEventListener('dragging-changed', disableOrbit);
+
+  // Sinkronisasi nilai sudut rotasi ke input teks saat diputar dengan mouse
+  transformControlsRotate.addEventListener('change', syncRotationToUI);
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -65,23 +75,50 @@ function initThreeJS() {
   animate();
 }
 
-/* --- LOGIKA GIZMO MELAYANG (GESER & PUTAR) --- */
-function setGizmoMode(mode) {
-  currentGizmoMode = mode;
-  transformControls.setMode(mode);
-
-  document.getElementById('btnModeTranslate').classList.toggle('active', mode === 'translate');
-  document.getElementById('btnModeRotate').classList.toggle('active', mode === 'rotate');
+/* --- ATTACH GIZMO BERSAMAAN (GESER & PUTAR) --- */
+function attachGizmos(targetObject) {
+  if (targetObject) {
+    transformControlsTranslate.attach(targetObject);
+    transformControlsRotate.attach(targetObject);
+    transformControlsTranslate.visible = true;
+    transformControlsRotate.visible = true;
+  } else {
+    transformControlsTranslate.detach();
+    transformControlsRotate.detach();
+    transformControlsTranslate.visible = false;
+    transformControlsRotate.visible = false;
+  }
 }
 
-function attachGizmoToObject(targetObject) {
-  if (targetObject) {
-    transformControls.attach(targetObject);
-    transformControls.visible = true;
-  } else {
-    transformControls.detach();
-    transformControls.visible = false;
+/* --- SINKRONISASI MANUSIA <-> MOUSE (NILAI ROTASI) --- */
+function syncRotationToUI() {
+  let targetObj = null;
+  if (activeAlat && toolGroup) {
+    targetObj = toolGroup;
+  } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
+    targetObj = bendaKerjaList[selectedObjIndex].group;
   }
+
+  if (targetObj && selectedObjIndex >= 0 && !activeAlat) {
+    const rotX = Math.round(THREE.MathUtils.radToDeg(targetObj.rotation.x));
+    const rotY = Math.round(THREE.MathUtils.radToDeg(targetObj.rotation.y));
+    const rotZ = Math.round(THREE.MathUtils.radToDeg(targetObj.rotation.z));
+
+    document.getElementById('objRotX').value = rotX;
+    document.getElementById('objRotY').value = rotY;
+    document.getElementById('objRotZ').value = rotZ;
+  }
+}
+
+function updateObjekRotasiManual() {
+  if (selectedObjIndex < 0) return;
+  const targetGroup = bendaKerjaList[selectedObjIndex].group;
+
+  const rx = THREE.MathUtils.degToRad(parseFloat(document.getElementById('objRotX').value) || 0);
+  const ry = THREE.MathUtils.degToRad(parseFloat(document.getElementById('objRotY').value) || 0);
+  const rz = THREE.MathUtils.degToRad(parseFloat(document.getElementById('objRotZ').value) || 0);
+
+  targetGroup.rotation.set(rx, ry, rz);
 }
 
 /* --- SELECT / DESELECT ALAT --- */
@@ -105,15 +142,15 @@ function toggleAlat(alat) {
     toolPanel.style.display = 'block';
 
     create3DTool();
-    pilihBendaKerja(selectedObjIndex, false); // Keep or attach gizmo to tool
-    attachGizmoToObject(toolGroup);
+    pilihBendaKerja(selectedObjIndex, false);
+    attachGizmos(toolGroup);
   } else {
     toolPanel.style.display = 'none';
     if (toolGroup) { scene.remove(toolGroup); toolGroup = null; }
     if (selectedObjIndex >= 0) {
-      attachGizmoToObject(bendaKerjaList[selectedObjIndex].group);
+      attachGizmos(bendaKerjaList[selectedObjIndex].group);
     } else {
-      attachGizmoToObject(null);
+      attachGizmos(null);
     }
   }
 }
@@ -165,7 +202,6 @@ function create3DTool() {
     toolGroup.add(head);
   }
 
-  // Posisikan alat di dekat benda kerja aktif jika ada
   if (selectedObjIndex >= 0) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
     toolGroup.position.y += 10;
@@ -185,7 +221,7 @@ function updateAlatTransform() {
 
 /* --- INTERAKSI KLIK & SELEKSI --- */
 function onViewportClick(event) {
-  if (event.target.tagName !== 'CANVAS' || transformControls.dragging) return;
+  if (event.target.tagName !== 'CANVAS' || transformControlsTranslate.dragging || transformControlsRotate.dragging) return;
 
   const container = document.getElementById('viewport');
   const rect = container.getBoundingClientRect();
@@ -195,7 +231,6 @@ function onViewportClick(event) {
 
   raycaster.setFromCamera(mouse, camera);
 
-  // Kumpulkan semua mesh kayu
   const targetMeshes = [];
   bendaKerjaList.forEach(b => { if (b.mainMesh) targetMeshes.push(b.mainMesh); });
 
@@ -207,13 +242,13 @@ function onViewportClick(event) {
     
     if (foundIndex !== -1) {
       if (selectedObjIndex === foundIndex && !activeAlat) {
-        pilihBendaKerja(-1); // Deselect kayu
+        pilihBendaKerja(-1); // Deselect
       } else {
         pilihBendaKerja(foundIndex);
       }
     }
   } else if (!activeAlat) {
-    pilihBendaKerja(-1); // Klik ruang kosong untuk deselect
+    pilihBendaKerja(-1); // Deselect di ruang kosong
   }
 }
 
@@ -332,17 +367,19 @@ function pilihBendaKerja(index, attachGizmo = true) {
     document.getElementById('objT').value = item.t;
     document.getElementById('objOpacity').value = item.opacity;
     document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
+
+    syncRotationToUI();
     controlsDiv.style.display = 'block';
 
     if (!item.mainMesh) updateObjekMesh(item);
 
     if (attachGizmo && !activeAlat) {
-      attachGizmoToObject(item.group);
+      attachGizmos(item.group);
     }
   } else {
     controlsDiv.style.display = 'none';
     if (attachGizmo && !activeAlat) {
-      attachGizmoToObject(null);
+      attachGizmos(null);
     }
   }
 
@@ -419,7 +456,7 @@ function updateObjekMesh(item) {
   item.mainMesh.receiveShadow = true;
   group.add(item.mainMesh);
 
-  // Wireframe Strimin Overlay (Tergabung di dalam Group sehingga otomatis ikut bergeser & berputar)
+  // Strimin Wireframe Overlay
   const wireframeMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
