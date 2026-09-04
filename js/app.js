@@ -5,7 +5,7 @@ let activeBahan = 'balok';
 let activeAlat = 'gergaji';
 let activeFase = 'pahat';
 
-// Inisialisasi Canvas 3D saat dokumen dimuat
+// Inisialisasi Canvas 3D saat dokumen selesai dimuat
 window.addEventListener('DOMContentLoaded', () => {
   initThreeJS();
   updateBentuk();
@@ -33,7 +33,7 @@ function initThreeJS() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  // Pencahayaan (Lighting)
+  // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
@@ -42,21 +42,19 @@ function initThreeJS() {
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // Grid & Helper Sumbu (X=Red, Y=Green, Z=Blue)
+  // Grid Dasar Lantai
   const gridHelper = new THREE.GridHelper(60, 60, 0x444455, 0x222233);
   scene.add(gridHelper);
 
-  const axesHelper = new THREE.AxesHelper(15);
-  scene.add(axesHelper);
+  // Helper Sumbu Global (Merah = X, Hijau = Y, Biru = Z)
+  const globalAxes = new THREE.AxesHelper(15);
+  scene.add(globalAxes);
 
-  // Resizing Event Listener
   window.addEventListener('resize', onWindowResize);
-
-  // Animation Loop
   animate();
 }
 
-// Fungsi Mengganti Bahan
+// Fungsi Mengganti Bahan (Balok / Silinder)
 function pilihBahan(jenis) {
   activeBahan = jenis;
 
@@ -69,15 +67,13 @@ function pilihBahan(jenis) {
   updateBentuk();
 }
 
-// Fungsi Mengganti Alat
+// Fungsi Mengganti Alat (Gergaji / Pahat / Bor)
 function pilihAlat(alat) {
   activeAlat = alat;
 
   document.getElementById('item-gergaji').classList.toggle('active', alat === 'gergaji');
   document.getElementById('item-pahat').classList.toggle('active', alat === 'pahat');
   document.getElementById('item-bor').classList.toggle('active', alat === 'bor');
-
-  console.log(`Alat aktif dikonfigurasi ke: ${activeAlat}`);
 }
 
 // Fungsi Mengganti Fase Simulasi
@@ -87,48 +83,72 @@ function setFase(fase) {
   document.getElementById('fasePahat').classList.toggle('active', fase === 'pahat');
   document.getElementById('faseRakit').classList.toggle('active', fase === 'rakit');
   document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
-
-  console.log(`Fase aktif dikonfigurasi ke: ${activeFase}`);
 }
 
-// Memperbarui Geometri Objek Kayu di Viewport
+// Memperbarui Geometri Objek Kayu + Strimin Panduan + Sumbu Lokal X, Y, Z
 function updateBentuk() {
   if (currentMesh) scene.remove(currentMesh);
 
+  currentMesh = new THREE.Group();
+
   let geometry;
-  // Material serat kayu sederhana
   const material = new THREE.MeshStandardMaterial({
     color: 0xc28e0e,
     roughness: 0.6,
-    metalness: 0.1
+    metalness: 0.1,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1
   });
+
+  let height = 30;
 
   if (activeBahan === 'balok') {
     const p = parseFloat(document.getElementById('balokP').value) || 10;
     const l = parseFloat(document.getElementById('balokL').value) || 10;
     const t = parseFloat(document.getElementById('balokT').value) || 30;
+    height = t;
 
-    // Parameters: Width (X), Height (Y), Depth (Z)
     geometry = new THREE.BoxGeometry(p, t, l);
-    currentMesh = new THREE.Mesh(geometry, material);
-    currentMesh.position.set(0, t / 2, 0);
-
   } else if (activeBahan === 'silinder') {
     const p = parseFloat(document.getElementById('silinderP').value) || 25;
     const d = parseFloat(document.getElementById('silinderD').value) || 4;
     const radius = d / 2;
+    height = p;
 
-    // Parameters: RadiusTop, RadiusBottom, Height (Y), RadialSegments
-    geometry = new THREE.CylinderGeometry(radius, radius, p, 32);
-    currentMesh = new THREE.Mesh(geometry, material);
-    currentMesh.position.set(0, p / 2, 0);
+    geometry = new THREE.CylinderGeometry(radius, radius, p, 16);
   }
 
-  if (currentMesh) {
-    currentMesh.castShadow = true;
-    currentMesh.receiveShadow = true;
-    scene.add(currentMesh);
-  }
+  // 1. Mesh Utama Kayu
+  const woodMesh = new THREE.Mesh(geometry, material);
+  woodMesh.castShadow = true;
+  woodMesh.receiveShadow = true;
+  currentMesh.add(woodMesh);
+
+  // 2. Strimin Panduan (Wireframe Overlay Transparan)
+  const wireframeMat = new THREE.MeshBasicMaterial({
+    color: 0x4a82e8,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.35
+  });
+  const striminOverlay = new THREE.Mesh(geometry, wireframeMat);
+  currentMesh.add(striminOverlay);
+
+  // 3. Outlines Rusuk Tegas (Edges)
+  const edgesGeometry = new THREE.EdgesGeometry(geometry);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
+  const wireframeEdges = new THREE.LineSegments(edgesGeometry, lineMat);
+  currentMesh.add(wireframeEdges);
+
+  // 4. Indicator Sumbu Lokal Kayu (X, Y, Z)
+  const objectAxes = new THREE.AxesHelper(Math.max(height * 0.4, 8));
+  currentMesh.add(objectAxes);
+
+  // Posisikan di atas permukaan lantai (Grid Y=0)
+  currentMesh.position.set(0, height / 2, 0);
+
+  scene.add(currentMesh);
 }
 
 function onWindowResize() {
