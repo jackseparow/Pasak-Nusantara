@@ -15,8 +15,6 @@ let mouse = new THREE.Vector2();
 
 // Sistem Partikel Percikan Kayu
 let particleSystems = [];
-
-// Status Animasi Alat Pemotong
 let isCuttingAnimation = false;
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -78,16 +76,15 @@ function initThreeJS() {
   animate();
 }
 
-/* --- ANIMASI PERCIKAN TAHI KAYU (WOOD SHAVINGS) --- */
+/* --- ANIMASI PERCIKAN TAHI KAYU --- */
 function triggerWoodSparks(position) {
-  const particleCount = 25;
+  const particleCount = 30;
   const geometry = new THREE.BufferGeometry();
   const positions = [];
   const velocities = [];
 
   for (let i = 0; i < particleCount; i++) {
     positions.push(position.x, position.y, position.z);
-    
     const vx = (Math.random() - 0.5) * 14;
     const vy = Math.random() * 12 + 3;
     const vz = (Math.random() - 0.5) * 14;
@@ -117,7 +114,6 @@ function updateParticles() {
   for (let i = particleSystems.length - 1; i >= 0; i--) {
     const ps = particleSystems[i];
     const posAttr = ps.mesh.geometry.attributes.position;
-    
     ps.life -= 0.04;
 
     for (let j = 0; j < posAttr.count; j++) {
@@ -125,8 +121,7 @@ function updateParticles() {
       let y = posAttr.getY(j) + ps.velocities[j * 3 + 1] * 0.05;
       let z = posAttr.getZ(j) + ps.velocities[j * 3 + 2] * 0.05;
 
-      ps.velocities[j * 3 + 1] -= 0.5; // Efek Gravitasi
-
+      ps.velocities[j * 3 + 1] -= 0.5;
       posAttr.setXYZ(j, x, y, z);
     }
 
@@ -161,7 +156,7 @@ function bersihkanAreaKerja() {
   }
 }
 
-/* --- SAKLAR GIZMO --- */
+/* --- CONTROL GIZMO --- */
 function setGizmoActiveMode(mode) {
   activeGizmoMode = mode;
 
@@ -201,7 +196,6 @@ function refreshGizmoTarget() {
   }
 }
 
-/* --- SINKRONISASI ROTASI SISI UI --- */
 function syncRotationToUI() {
   let targetObj = null;
   if (activeAlat && toolGroup) {
@@ -237,7 +231,7 @@ function updateObjekRotasiManual() {
   targetGroup.rotation.set(rx, ry, rz);
 }
 
-/* --- MANAJEMEN ALAT KERJA --- */
+/* --- MANAJEMEN ALAT --- */
 function toggleAlat(alat) {
   if (activeAlat === alat || alat === null) {
     activeAlat = null;
@@ -284,7 +278,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MEMBUAT MODEL ALAT 3D --- */
+/* --- MODEL ALAT 3D --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -363,7 +357,6 @@ function updateAlatTransform() {
   }
 }
 
-/* --- INTERAKSI KLIK SELEKSI --- */
 function onViewportClick(event) {
   if (event.target.tagName !== 'CANVAS' || transformControl.dragging || isCuttingAnimation) return;
 
@@ -403,7 +396,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- EKSEKUSI PEMOTONGAN DENGAN ANIMASI GERAKAN ALAT & CSG --- */
+/* --- ANIMASI PEMOTONGAN & PROSES CSG --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat || isCuttingAnimation) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -414,36 +407,32 @@ function eksekusiPemotongan() {
   if (!targetObj.mainMesh || !cutterGeometryMesh || !toolGroup) return;
 
   isCuttingAnimation = true;
-  transformControl.detach(); // Sembunyikan gizmo saat animasi berjalan
+  transformControl.detach();
 
   const startPos = toolGroup.position.clone();
   const startRot = toolGroup.rotation.clone();
   let startTime = performance.now();
-  const duration = 1200; // Durasi animasi 1.2 detik
+  const duration = 1200;
 
   function animateToolAction(now) {
     const elapsed = now - startTime;
     const progress = Math.min(elapsed / duration, 1.0);
 
-    // Trigger Efek Percikan Tahi Kayu Beruntun
-    if (Math.random() < 0.4) {
+    if (Math.random() < 0.45) {
       triggerWoodSparks(toolGroup.position);
     }
 
     if (activeAlat === 'gergaji') {
-      // Animasi Gergaji: Maju Mundur sepanjang Z local
       const stroke = Math.sin(progress * Math.PI * 10) * 3;
       const forwardVec = new THREE.Vector3(0, 0, stroke).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(forwardVec);
 
     } else if (activeAlat === 'bor') {
-      // Animasi Bor: Berputar cepat + penetrasi masuk sedikit
       toolGroup.rotation.y = startRot.y + progress * Math.PI * 20;
       const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'pahat') {
-      // Animasi Pahat: Sentakan Memahat (Chipping/Hammering)
       const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
       const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(hammerVec);
@@ -452,7 +441,6 @@ function eksekusiPemotongan() {
     if (progress < 1.0) {
       requestAnimationFrame(animateToolAction);
     } else {
-      // Kembalikan Posisi Semula Lalu Eksekusi Pemotongan CSG
       toolGroup.position.copy(startPos);
       toolGroup.rotation.copy(startRot);
 
@@ -465,7 +453,7 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PROSES PEMOTONGAN CSG (PEMBUATAN LUBANG FISIK) --- */
+/* --- PEMBUATAN LUBANG FISIK CSG TERPERBAIKI --- */
 function prosesCSGCutting(targetObj) {
   try {
     targetObj.mainMesh.updateMatrixWorld();
@@ -475,7 +463,10 @@ function prosesCSGCutting(targetObj) {
     cutterMeshWorld.position.copy(toolGroup.position);
     cutterMeshWorld.rotation.copy(toolGroup.rotation);
     cutterMeshWorld.scale.copy(toolGroup.scale);
-    cutterMeshWorld.position.sub(targetObj.group.position);
+    
+    // Transformasikan posisi cutter relatif terhadap parent group benda kerja
+    targetObj.group.worldToLocal(cutterMeshWorld.position);
+    cutterMeshWorld.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
     cutterMeshWorld.updateMatrix();
 
     const csgTarget = THREE.CSG.fromMesh(targetObj.mainMesh);
@@ -483,72 +474,23 @@ function prosesCSGCutting(targetObj) {
 
     const csgResult = csgTarget.subtract(csgCutter);
 
-    // Material Kayu dengan Penampang Rongga Dalam
-    const woodOuterMat = new THREE.MeshStandardMaterial({
+    // Material Cokelat Dalam untuk Dinding Bekas Potongan
+    const woodMat = new THREE.MeshStandardMaterial({
       color: 0xc28e0e,
       roughness: 0.6,
       metalness: 0.1
     });
 
-    const woodInnerCutMat = new THREE.MeshStandardMaterial({
-      color: 0x8b5a2b, // Warna Kayu Bagian Dalam (Cokelat Guratan)
-      roughness: 0.8,
-      metalness: 0.05
-    });
-
-    const newMeshResult = THREE.CSG.toMesh(csgResult, targetObj.mainMesh.matrix, [woodOuterMat, woodInnerCutMat]);
+    const newMeshResult = THREE.CSG.toMesh(csgResult, new THREE.Matrix4(), woodMat);
     newMeshResult.castShadow = true;
     newMeshResult.receiveShadow = true;
 
-    const separatedGeometries = splitDisconnectedGeometries(newMeshResult.geometry);
+    targetObj.group.remove(targetObj.mainMesh);
+    targetObj.mainMesh = newMeshResult;
+    targetObj.group.add(targetObj.mainMesh);
+    targetObj.hasBeenCut = true;
 
-    if (separatedGeometries.length > 1) {
-      scene.remove(targetObj.group);
-      const parentName = targetObj.nama;
-      const parentGroupPos = targetObj.group.position.clone();
-      const parentGroupRot = targetObj.group.rotation.clone();
-
-      bendaKerjaList.splice(selectedObjIndex, 1);
-
-      separatedGeometries.forEach((subGeo, idx) => {
-        const subMesh = new THREE.Mesh(subGeo, [woodOuterMat, woodInnerCutMat]);
-        subMesh.castShadow = true;
-        subMesh.receiveShadow = true;
-
-        const newGroup = new THREE.Group();
-        newGroup.position.copy(parentGroupPos);
-        newGroup.rotation.copy(parentGroupRot);
-        newGroup.add(subMesh);
-
-        const suffix = String.fromCharCode(65 + idx);
-        const newObjData = {
-          id: Date.now() + idx,
-          nama: `${parentName} (${suffix})`,
-          jenis: targetObj.jenis,
-          p: targetObj.p,
-          l: targetObj.l,
-          t: targetObj.t,
-          opacity: targetObj.opacity,
-          group: newGroup,
-          mainMesh: subMesh,
-          hasBeenCut: true
-        };
-
-        rebuildOverlays(newObjData);
-        scene.add(newGroup);
-        bendaKerjaList.push(newObjData);
-      });
-
-      pilihBendaKerja(bendaKerjaList.length - 2);
-
-    } else {
-      targetObj.group.remove(targetObj.mainMesh);
-      targetObj.mainMesh = newMeshResult;
-      targetObj.group.add(targetObj.mainMesh);
-      targetObj.hasBeenCut = true;
-
-      rebuildOverlays(targetObj);
-    }
+    rebuildOverlays(targetObj);
 
   } catch (err) {
     console.error("CSG Error:", err);
@@ -556,77 +498,7 @@ function prosesCSGCutting(targetObj) {
   }
 }
 
-function splitDisconnectedGeometries(geometry) {
-  const nonIndexedGeo = geometry.toNonIndexed();
-  const posAttr = nonIndexedGeo.attributes.position;
-  const triangleCount = posAttr.count / 3;
-
-  const triangles = [];
-  for (let i = 0; i < triangleCount; i++) {
-    triangles.push([
-      new THREE.Vector3().fromBufferAttribute(posAttr, i * 3),
-      new THREE.Vector3().fromBufferAttribute(posAttr, i * 3 + 1),
-      new THREE.Vector3().fromBufferAttribute(posAttr, i * 3 + 2)
-    ]);
-  }
-
-  const visited = new Array(triangleCount).fill(false);
-  const groups = [];
-
-  for (let i = 0; i < triangleCount; i++) {
-    if (visited[i]) continue;
-
-    const currentGroup = [];
-    const queue = [i];
-    visited[i] = true;
-
-    while (queue.length > 0) {
-      const currIdx = queue.pop();
-      currentGroup.push(triangles[currIdx]);
-
-      const t1 = triangles[currIdx];
-
-      for (let j = 0; j < triangleCount; j++) {
-        if (visited[j]) continue;
-        const t2 = triangles[j];
-
-        if (trianglesShareVertex(t1, t2)) {
-          visited[j] = true;
-          queue.push(j);
-        }
-      }
-    }
-
-    groups.push(currentGroup);
-  }
-
-  if (groups.length <= 1) return [geometry];
-
-  return groups.map(groupTriangles => {
-    const positions = [];
-    groupTriangles.forEach(tri => {
-      positions.push(tri[0].x, tri[0].y, tri[0].z);
-      positions.push(tri[1].x, tri[1].y, tri[1].z);
-      positions.push(tri[2].x, tri[2].y, tri[2].z);
-    });
-
-    const newGeo = new THREE.BufferGeometry();
-    newGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    newGeo.computeVertexNormals();
-    return newGeo;
-  });
-}
-
-function trianglesShareVertex(t1, t2, threshold = 0.0001) {
-  for (let a = 0; a < 3; a++) {
-    for (let b = 0; b < 3; b++) {
-      if (t1[a].distanceTo(t2[b]) < threshold) return true;
-    }
-  }
-  return false;
-}
-
-/* --- REBUILD OVERLAYS STRIMIN & BEKAS POTONGAN --- */
+/* --- OVERLAY VISUAL RONGGA DAN STRIMIN --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -636,7 +508,7 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // 1. Strimin Grid Overlay Wireframe
+  // 1. Strimin Grid Wireframe
   const striminMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -646,12 +518,12 @@ function rebuildOverlays(item) {
   const striminMesh = new THREE.Mesh(item.mainMesh.geometry, striminMat);
   item.group.add(striminMesh);
 
-  // 2. Outlines Garis Batas Edges
+  // 2. Outlines
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
 
-  // 3. Highlight Penampang Bekas Lubang (Garis Batas Oranye Terang)
+  // 3. Highlight Penampang Berlubang Oranye Neon
   if (item.hasBeenCut) {
     const cutEdgesMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
     const cutHighlight = new THREE.LineSegments(edgesGeometry, cutEdgesMat);
@@ -852,6 +724,6 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  updateParticles(); // Animasi partikel percikan kayu
+  updateParticles();
   renderer.render(scene, camera);
 }
