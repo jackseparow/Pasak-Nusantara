@@ -1,11 +1,11 @@
-let scene, camera, renderer, controls;
+let scene, camera, renderer, controls, dragControls;
 let bendaKerjaList = [];
+let draggableObjects = [];
 let selectedObjIndex = -1;
 let jenisBahanBaru = 'balok';
 let activeAlat = 'gergaji';
 let activeFase = 'pahat';
 
-// Visualisasi Alat 3D & Raycasting
 let toolGroup = null;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
@@ -31,9 +31,13 @@ function initThreeJS() {
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
+  // Orbit Controls (Rotasi Kamera)
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
+
+  // Drag Controls (Geser Benda Kerja)
+  initDragControls();
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -49,10 +53,8 @@ function initThreeJS() {
   const globalAxes = new THREE.AxesHelper(15);
   scene.add(globalAxes);
 
-  // Buat Alat 3D
   create3DTool();
 
-  // Event Listener Interaksi Kursor di Viewport
   container.addEventListener('mousemove', onViewportMouseMove);
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
@@ -60,19 +62,48 @@ function initThreeJS() {
   animate();
 }
 
-/* --- PEMBUATAN BENTUK ALAT 3D --- */
+/* --- DRAG CONTROLS SETUP --- */
+function initDragControls() {
+  dragControls = new THREE.DragControls(draggableObjects, camera, renderer.domElement);
+
+  // Saat objek mulai di-drag, matikan OrbitControls agar kamera tidak berputar
+  dragControls.addEventListener('dragstart', (event) => {
+    controls.enabled = false;
+
+    // Otomatis pilih objek yang sedang di-drag
+    const parentGroup = event.object.parent;
+    const foundIndex = bendaKerjaList.findIndex(b => b.group === parentGroup);
+    if (foundIndex !== -1) {
+      pilihBendaKerja(foundIndex);
+    }
+  });
+
+  // Saat selesai di-drag, hidupkan kembali OrbitControls
+  dragControls.addEventListener('dragend', () => {
+    controls.enabled = true;
+  });
+}
+
+function updateDraggableList() {
+  draggableObjects.length = 0; // Clear Array
+  bendaKerjaList.forEach(item => {
+    if (item.group.children[0]) {
+      draggableObjects.push(item.group.children[0]); // Ambil mesh utama kayu
+    }
+  });
+}
+
+/* --- PEMBUATAN ALAT 3D --- */
 function create3DTool() {
   if (toolGroup) scene.remove(toolGroup);
 
   toolGroup = new THREE.Group();
 
   if (activeAlat === 'gergaji') {
-    // Bilah Gergaji Tipis
     const bladeGeo = new THREE.BoxGeometry(0.2, 6, 12);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
 
-    // Pegangan Gergaji
     const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 3);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
     const handle = new THREE.Mesh(handleGeo, handleMat);
@@ -82,12 +113,10 @@ function create3DTool() {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'pahat') {
-    // Batang Pahat
     const chiselGeo = new THREE.BoxGeometry(0.8, 8, 0.3);
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.9, roughness: 0.1 });
     const chisel = new THREE.Mesh(chiselGeo, chiselMat);
 
-    // Gagang Kayu
     const handleGeo = new THREE.CylinderGeometry(0.6, 0.5, 4, 12);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
     const handle = new THREE.Mesh(handleGeo, handleMat);
@@ -97,12 +126,10 @@ function create3DTool() {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
-    // Mata Bor Silinder
     const drillGeo = new THREE.CylinderGeometry(0.6, 0.1, 8, 16);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     const drill = new THREE.Mesh(drillGeo, drillMat);
 
-    // Mesin Bor / Head
     const headGeo = new THREE.BoxGeometry(2, 3, 2);
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const head = new THREE.Mesh(headGeo, headMat);
@@ -155,18 +182,11 @@ function onViewportMouseMove(event) {
 
   raycaster.setFromCamera(mouse, camera);
 
-  // Cari persimpangan dengan objek kayu yang aktif
-  const activeMeshes = [];
-  bendaKerjaList.forEach(b => {
-    if (b.group.children[0]) activeMeshes.push(b.group.children[0]);
-  });
-
-  const intersects = raycaster.intersectObjects(activeMeshes);
+  const intersects = raycaster.intersectObjects(draggableObjects);
 
   if (intersects.length > 0) {
     const hitPoint = intersects[0].point;
 
-    // Snap koordinat ke satuan unit bulat terdekat (Strimin Snap)
     targetGridPoint.set(
       Math.round(hitPoint.x),
       Math.round(hitPoint.y),
@@ -181,14 +201,12 @@ function onViewportMouseMove(event) {
 
 function onViewportClick() {
   if (activeFase !== 'pahat') return;
-  isTargetLocked = !isTargetLocked; // Toggle Kunci Titik
+  isTargetLocked = !isTargetLocked;
 }
 
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0) return;
-
   alert(`Memotong/Mengebor di titik (${targetGridPoint.x}, ${targetGridPoint.y}, ${targetGridPoint.z}) dengan ${activeAlat}!`);
-  // Logika pembentukan boolean geometry/lubang pasak dapat dikembangkan lebih lanjut di sini.
 }
 
 /* --- MANAJEMEN BENDA KERJA --- */
@@ -334,6 +352,9 @@ function updateObjekMesh(item) {
   group.add(objectAxes);
 
   group.position.y = height / 2;
+
+  // Perbarui daftar objek yang bisa di-drag
+  updateDraggableList();
 }
 
 function setFase(fase) {
@@ -343,6 +364,10 @@ function setFase(fase) {
   document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
 
   if (toolGroup) toolGroup.visible = (fase === 'pahat');
+  
+  // Sembunyikan/tampilkan panel floating alat
+  const toolPanel = document.getElementById('toolOverlayPanel');
+  if (toolPanel) toolPanel.style.display = (fase === 'pahat') ? 'block' : 'none';
 }
 
 function onWindowResize() {
