@@ -1,252 +1,145 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Geoblock - Pasak Nusantara 3D</title>
-  
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+// Variable Utama Three.js
+let scene, camera, renderer, controls;
+let currentMesh = null;
+let activeBahan = 'balok';
+let activeAlat = 'gergaji';
+let activeFase = 'pahat';
 
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
-      background-color: #121218;
-      color: #fff;
-    }
-    
-    header {
-      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-      padding: 10px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      z-index: 10;
-    }
-    .logo-container { display: flex; align-items: center; gap: 12px; }
-    .header-logo { height: 38px; width: auto; }
-    .title-group h1 { font-size: 1.1rem; font-weight: 700; }
-    .title-group p { font-size: 0.75rem; opacity: 0.85; }
+// Inisialisasi Canvas 3D saat dokumen dimuat
+window.addEventListener('DOMContentLoaded', () => {
+  initThreeJS();
+  updateBentuk();
+});
 
-    .main-container { display: flex; flex: 1; height: calc(100vh - 58px); }
-    
-    #stock-panel {
-      width: 280px;
-      background-color: #1e1e28;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      border-right: 1px solid #2e2e3e;
-      overflow-y: auto;
-      user-select: none;
-    }
+function initThreeJS() {
+  const container = document.getElementById('viewport');
 
-    .stock-section {
-      background-color: #252535;
-      padding: 12px;
-      border-radius: 8px;
-      border: 1px solid #333346;
-    }
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0d0d12);
 
-    .stock-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #4a82e8;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
+  // Camera
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+  camera.position.set(30, 30, 40);
 
-    .stock-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
 
-    .stock-item {
-      background-color: #1a1a24;
-      border: 2px solid #3b3b52;
-      border-radius: 8px;
-      padding: 12px 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
+  // Controls (Orbit)
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
 
-    .stock-item:hover {
-      border-color: #4a82e8;
-      background-color: #2a2a3c;
-      transform: translateY(-2px);
-    }
+  // Pencahayaan (Lighting)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
 
-    .stock-item.active {
-      border-color: #4a82e8;
-      background-color: #2a5298;
-    }
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(20, 40, 20);
+  dirLight.castShadow = true;
+  scene.add(dirLight);
 
-    .stock-icon { font-size: 2rem; }
-    .stock-label { font-size: 0.75rem; font-weight: 600; color: #ddd; text-align: center; }
+  // Grid & Helper Sumbu (X=Red, Y=Green, Z=Blue)
+  const gridHelper = new THREE.GridHelper(60, 60, 0x444455, 0x222233);
+  scene.add(gridHelper);
 
-    .param-group {
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
+  const axesHelper = new THREE.AxesHelper(15);
+  scene.add(axesHelper);
 
-    .param-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.8rem;
-    }
+  // Resizing Event Listener
+  window.addEventListener('resize', onWindowResize);
 
-    .param-row input {
-      width: 60px;
-      padding: 4px;
-      border-radius: 4px;
-      border: 1px solid #4a4a60;
-      background: #121218;
-      color: #fff;
-      text-align: center;
-    }
+  // Animation Loop
+  animate();
+}
 
-    #viewport {
-      flex: 1;
-      position: relative;
-      background-color: #0d0d12;
-      cursor: crosshair;
-    }
+// Fungsi Mengganti Bahan
+function pilihBahan(jenis) {
+  activeBahan = jenis;
 
-    .phase-bar {
-      position: absolute;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      background: rgba(25, 25, 35, 0.85);
-      padding: 6px;
-      border-radius: 8px;
-      backdrop-filter: blur(4px);
-      border: 1px solid #3b3b52;
-      z-index: 5;
-    }
+  document.getElementById('item-balok').classList.toggle('active', jenis === 'balok');
+  document.getElementById('item-silinder').classList.toggle('active', jenis === 'silinder');
 
-    .btn-phase {
-      padding: 6px 14px;
-      border: none;
-      background: transparent;
-      color: #aaa;
-      font-weight: 600;
-      font-size: 0.8rem;
-      border-radius: 4px;
-      cursor: pointer;
-    }
+  document.getElementById('formBalok').style.display = (jenis === 'balok') ? 'flex' : 'none';
+  document.getElementById('formSilinder').style.display = (jenis === 'silinder') ? 'flex' : 'none';
 
-    .btn-phase.active { background: #2a5298; color: #fff; }
-    .btn-phase.shake.active { background: #d9534f; }
+  updateBentuk();
+}
 
-    .hint-box {
-      font-size: 0.72rem;
-      color: #aaa;
-      margin-top: 10px;
-      line-height: 1.35;
-      background: rgba(0, 0, 0, 0.25);
-      padding: 10px;
-      border-radius: 6px;
-      border-left: 3px solid #4a82e8;
-    }
+// Fungsi Mengganti Alat
+function pilihAlat(alat) {
+  activeAlat = alat;
 
-    /* Penjelasan Sumbu Koordinat */
-    .axis-legend {
-      font-size: 0.7rem;
-      margin-top: 8px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-    .axis-item { display: flex; align-items: center; gap: 6px; }
-    .axis-color { width: 10px; height: 10px; border-radius: 2px; }
-  </style>
-</head>
-<body>
+  document.getElementById('item-gergaji').classList.toggle('active', alat === 'gergaji');
+  document.getElementById('item-pahat').classList.toggle('active', alat === 'pahat');
+  document.getElementById('item-bor').classList.toggle('active', alat === 'bor');
 
-  <header>
-    <div class="logo-container">
-      <img src="assets/logo-bbgtk.png" alt="BBGTK" class="header-logo" onerror="this.style.display='none'">
-      <img src="assets/logo-taman-numerasi.png" alt="Taman Numerasi" class="header-logo" onerror="this.style.display='none'">
-      <div class="title-group">
-        <h1>GEOBLOCK 3D: PASAK NUSANTARA</h1>
-        <p>Eksplorasi Geometri & Sambungan Kayu Tradisional</p>
-      </div>
-    </div>
-  </header>
+  console.log(`Alat aktif dikonfigurasi ke: ${activeAlat}`);
+}
 
-  <div class="main-container">
-    <div id="stock-panel">
-      
-      <div class="stock-section">
-        <div class="stock-title">📦 Stock Bahan</div>
-        <div class="stock-grid">
-          <div class="stock-item active" id="item-balok" onclick="pilihBahan('balok')">
-            <div class="stock-icon">🪵</div>
-            <div class="stock-label">Balok Kayu</div>
-          </div>
-          <div class="stock-item" id="item-silinder" onclick="pilihBahan('silinder')">
-            <div class="stock-icon">🪵</div>
-            <div class="stock-label">Silinder (Pasak)</div>
-          </div>
-        </div>
+// Fungsi Mengganti Fase Simulasi
+function setFase(fase) {
+  activeFase = fase;
 
-        <div id="formBalok" class="param-group">
-          <div class="param-row"><label>Panjang (X):</label><input type="number" id="balokP" value="10" min="2" max="30" oninput="updateBentuk()"></div>
-          <div class="param-row"><label>Lebar (Z):</label><input type="number" id="balokL" value="10" min="2" max="30" oninput="updateBentuk()"></div>
-          <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="balokT" value="30" min="2" max="50" oninput="updateBentuk()"></div>
-        </div>
+  document.getElementById('fasePahat').classList.toggle('active', fase === 'pahat');
+  document.getElementById('faseRakit').classList.toggle('active', fase === 'rakit');
+  document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
 
-        <div id="formSilinder" class="param-group" style="display:none;">
-          <div class="param-row"><label>Panjang/Tinggi (Y):</label><input type="number" id="silinderP" value="25" min="2" max="50" oninput="updateBentuk()"></div>
-          <div class="param-row"><label>Diameter (D):</label><input type="number" id="silinderD" value="8" min="1" max="20" oninput="updateBentuk()"></div>
-        </div>
-      </div>
+  console.log(`Fase aktif dikonfigurasi ke: ${activeFase}`);
+}
 
-      <div class="stock-section">
-        <div class="stock-title">🛠️ Stock Alat</div>
-        <div class="stock-grid">
-          <div class="stock-item active" id="item-gergaji" onclick="pilihAlat('gergaji')">
-            <div class="stock-icon">🪚</div>
-            <div class="stock-label">Gergaji</div>
-          </div>
-          <div class="stock-item" id="item-pahat" onclick="pilihAlat('pahat')">
-            <div class="stock-icon">🪛</div>
-            <div class="stock-label">Pahat</div>
-          </div>
-          <div class="stock-item" id="item-bor" onclick="pilihAlat('bor')">
-            <div class="stock-icon">🔘</div>
-            <div class="stock-label">Bor</div>
-          </div>
-        </div>
-      </div>
+// Memperbarui Geometri Objek Kayu di Viewport
+function updateBentuk() {
+  if (currentMesh) scene.remove(currentMesh);
 
-      <div class="hint-box">
-        📍 <strong>Sumbu Koordinat 3D:</strong>
-        <div class="axis-legend">
-          <div class="axis-item"><div class="axis-color" style="background:#00ff00;"></div> <span><strong>Sumbu Y (Hijau):</strong> Vertikal / Tinggi</span></div>
-          <div class="axis-item"><div class="axis-color" style="background:#ff0000;"></div> <span><strong>Sumbu X (Merah):</strong> Horizontal / Panjang</span></div>
-          <div class="axis-item"><div class="axis-color" style="background:#0000ff;"></div> <span><strong>Sumbu Z (Biru):</strong> Kedalaman / Lebar</span></div>
-        </div>
-      </div>
+  let geometry;
+  // Material serat kayu sederhana
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xc28e0e,
+    roughness: 0.6,
+    metalness: 0.1
+  });
 
-    </div>
+  if (activeBahan === 'balok') {
+    const p = parseFloat(document.getElementById('balokP').value) || 10;
+    const l = parseFloat(document.getElementById('balokL').value) || 10;
+    const t = parseFloat(document.getElementById('balokT').value) || 30;
+
+    // Parameters: Width (X), Height (Y), Depth (Z)
+    geometry = new THREE.BoxGeometry(p, t, l);
+    currentMesh = new THREE.Mesh(geometry, material);
+    currentMesh.position.set(0, t / 2, 0);
+
+  } else if (activeBahan === 'silinder') {
+    const p = parseFloat(document.getElementById('silinderP').value) || 25;
+    const d = parseFloat(document.getElementById('silinderD').value) || 4;
+    const radius = d / 2;
+
+    // Parameters: RadiusTop, RadiusBottom, Height (Y), RadialSegments
+    geometry = new THREE.CylinderGeometry(radius, radius, p, 32);
+    currentMesh = new THREE.Mesh(geometry, material);
+    currentMesh.position.set(0, p / 2, 0);
+  }
+
+  if (currentMesh) {
+    currentMesh.castShadow = true;
+    currentMesh.receiveShadow = true;
+    scene.add(currentMesh);
+  }
+}
+
+function onWindowResize() {
+  const container = document.getElementById('viewport');
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
