@@ -36,7 +36,6 @@ function initThreeJS() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  renderer.localClippingEnabled = true; // Aktifkan pemotongan fisik Three.js
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -483,26 +482,46 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMBUATAN FISIK LUBANG TEMBUS (MURNI MEMOTONG BAHAN) --- */
+/* --- HASIL RONGGA FISIK (IF-THEN PENGECEKAN KEDALAMAN UTAMANYA) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
-  const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
+  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
+
+  // 1. HITUNG HITUNGAN DIMENSI MAKSIMAL BAHAN PADA ARAH POTONGAN
+  let maxThickness = 30;
+  if (targetObj.jenis === 'balok') {
+    // Tentukan tebal maksimal berdasarkan normal bidang potong
+    const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
+    if (localNormal.y > 0.5) maxThickness = targetObj.t;
+    else if (localNormal.x > 0.5) maxThickness = targetObj.p;
+    else maxThickness = targetObj.l;
+  } else {
+    maxThickness = targetObj.t; // Diameter silinder
+  }
+
+  // 2. PENGECEKAN IF-THEN: LUBANG TIDAK BOLEH MENONJOL MELEBIHI BAHAN
+  let effectiveDepth = valDepthInput;
+  let isThruHole = false;
+
+  if (valDepthInput >= maxThickness) {
+    effectiveDepth = maxThickness;
+    isThruHole = true; // Lubang tembus penuh
+  }
 
   const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
-
   let holeGeo;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32, 1, isThruHole);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
-    holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
-  } else {
+  } else { // gergaji
     let targetSpan = 12;
     if (targetObj.jenis === 'balok') {
       targetSpan = targetObj.l * 1.02;
@@ -510,17 +529,23 @@ function prosesCutterVisualResult(targetObj) {
       targetSpan = targetObj.t * 1.02;
     }
 
-    holeGeo = new THREE.BoxGeometry(0.5, valDepth, targetSpan);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
   }
 
-  // Material Dinding Dalam Lubang
+  // Material Dinding Dalam Lubang (Warna Serat Dalam Kayu)
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x1a0a02, // Cokelat paling gelap/hitam rongga berlubang
-    roughness: 1.0,
+    color: 0x241103, // Cokelat tua serat dalam kayu
+    roughness: 0.9,
     metalness: 0.0,
     side: THREE.DoubleSide
   });
+
+  // Jika tembus penuh, buat penutup bawah transparan agar tembus pandang
+  if (isThruHole) {
+    innerWoodMat.transparent = true;
+    innerWoodMat.opacity = 0.95;
+  }
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   cutMesh.position.copy(localHitPos);
@@ -531,21 +556,11 @@ function prosesCutterVisualResult(targetObj) {
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Garis Neon Oranye Penegas Rongga Fisik
+  // Outline Garis Oranye Penegas Rongga Fisik
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
   const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
   cutMesh.add(cutLineSegments);
-
-  // Buat Bidang Pemotong (Clipping Plane) jika Kedalaman Menembus Bahan Kayu
-  const normalIn = new THREE.Vector3(0, -1, 0).applyQuaternion(toolGroup.quaternion);
-  const clipPlane = new THREE.Plane(normalIn, -valDepth);
-
-  if (!targetObj.mainMesh.material.clippingPlanes) {
-    targetObj.mainMesh.material.clippingPlanes = [];
-  }
-  targetObj.mainMesh.material.clippingPlanes.push(clipPlane);
-  targetObj.mainMesh.material.needsUpdate = true;
 
   rebuildOverlays(targetObj);
 }
