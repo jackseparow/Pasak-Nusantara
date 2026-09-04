@@ -75,6 +75,9 @@ function initThreeJS() {
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
 
+  // Pemicu awal agar dimensi canvas langsung memenuhi layar
+  onWindowResize();
+
   animate();
 }
 
@@ -759,6 +762,8 @@ function setFase(fase) {
 
 function onWindowResize() {
   const container = document.getElementById('viewport');
+  if (!container || !renderer || !camera) return;
+  
   camera.aspect = container.clientWidth / container.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(container.clientWidth, container.clientHeight);
