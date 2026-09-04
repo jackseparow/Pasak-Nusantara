@@ -75,7 +75,7 @@ function initThreeJS() {
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
 
-  // Pemicu awal agar dimensi canvas langsung memenuhi layar
+  // Memastikan ukuran canvas langsung pas saat pertama kali dimuat
   onWindowResize();
 
   animate();
@@ -283,7 +283,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D --- */
+/* --- MODEL ALAT 3D (PIVOT DIUBAH TEPAT DI UJUNG MATA POTONG) --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -296,34 +296,40 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const radius = valDiameter / 2;
     const tipHeight = 1.2;
 
+    const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
+
+    // Ujung Kerucut Mata Bor (Titik paling ujung berada di Y = 0)
     const tipGeo = new THREE.ConeGeometry(radius, tipHeight, 32);
     tipGeo.rotateX(Math.PI);
     tipGeo.translate(0, tipHeight / 2, 0);
-
-    const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     const tipMesh = new THREE.Mesh(tipGeo, drillMat);
 
+    // Batang Bor Silinder (Mulai dari Y = tipHeight ke atas)
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     drillGeo.translate(0, tipHeight + (valDepth / 2), 0);
     const mainDrill = new THREE.Mesh(drillGeo, drillMat);
 
+    // Kepala Bor / Chuck
     const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
     headGeo.translate(0, tipHeight + valDepth + 1.5, 0);
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const head = new THREE.Mesh(headGeo, headMat);
 
-    toolGroup.add(mainDrill);
     toolGroup.add(tipMesh);
+    toolGroup.add(mainDrill);
     toolGroup.add(head);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
+    
+    // Mata Pahat Pipih (Ujung mata pahat persis di Y = 0)
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     chiselGeo.translate(0, valDepth / 2, 0);
 
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
     const mainChisel = new THREE.Mesh(chiselGeo, chiselMat);
 
+    // Gagang Pahat
     const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 4, 12);
     handleGeo.translate(0, valDepth + 2, 0);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
@@ -339,12 +345,14 @@ function create3DTool(positionPoint = null, normalVector = null) {
       targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
     }
 
+    // Bilah Gergaji (Mata gergaji bagian bawah persis di Y = 0)
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, targetSpan);
     bladeGeo.translate(0, valDepth / 2, 0);
 
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     const mainBlade = new THREE.Mesh(bladeGeo, bladeMat);
 
+    // Pegangan Gergaji
     const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 4);
     handleGeo.translate(0, valDepth + 1.25, -targetSpan / 2);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
@@ -354,6 +362,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
   }
 
+  // MENEMPATKAN UJUNG ALAT PERSIS PADA TITIK KLIK
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
 
@@ -363,7 +372,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
-    toolGroup.position.y += 8;
+    toolGroup.position.y += bendaKerjaList[selectedObjIndex].t / 2;
   } else {
     toolGroup.position.set(0, 15, 0);
   }
