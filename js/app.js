@@ -85,7 +85,7 @@ function setFase(fase) {
   document.getElementById('faseUji').classList.toggle('active', fase === 'uji');
 }
 
-// Memperbarui Geometri Objek Kayu + Strimin Panduan + Sumbu Lokal X, Y, Z
+// Memperbarui Geometri Objek Kayu dengan Strimin Per Satuan Ukuran
 function updateBentuk() {
   if (currentMesh) scene.remove(currentMesh);
 
@@ -104,19 +104,22 @@ function updateBentuk() {
   let height = 30;
 
   if (activeBahan === 'balok') {
-    const p = parseFloat(document.getElementById('balokP').value) || 10;
-    const l = parseFloat(document.getElementById('balokL').value) || 10;
-    const t = parseFloat(document.getElementById('balokT').value) || 30;
+    const p = Math.max(1, Math.round(parseFloat(document.getElementById('balokP').value) || 10));
+    const l = Math.max(1, Math.round(parseFloat(document.getElementById('balokL').value) || 10));
+    const t = Math.max(1, Math.round(parseFloat(document.getElementById('balokT').value) || 30));
     height = t;
 
-    geometry = new THREE.BoxGeometry(p, t, l);
+    // Jumlah segmen dibuat sama persis dengan nilai ukuran (1 segmen = 1 unit)
+    geometry = new THREE.BoxGeometry(p, t, l, p, t, l);
+
   } else if (activeBahan === 'silinder') {
-    const p = parseFloat(document.getElementById('silinderP').value) || 25;
+    const p = Math.max(1, Math.round(parseFloat(document.getElementById('silinderP').value) || 25));
     const d = parseFloat(document.getElementById('silinderD').value) || 4;
     const radius = d / 2;
     height = p;
 
-    geometry = new THREE.CylinderGeometry(radius, radius, p, 16);
+    // Segmen tinggi dibuat sejumlah unit tinggi p (1 segmen vertikal = 1 unit)
+    geometry = new THREE.CylinderGeometry(radius, radius, p, 16, p);
   }
 
   // 1. Mesh Utama Kayu
@@ -125,12 +128,12 @@ function updateBentuk() {
   woodMesh.receiveShadow = true;
   currentMesh.add(woodMesh);
 
-  // 2. Strimin Panduan (Wireframe Overlay Transparan)
+  // 2. Strimin Panduan Modular (Presisi Per 1 Satuan Ukuran)
   const wireframeMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
     transparent: true,
-    opacity: 0.35
+    opacity: 0.4
   });
   const striminOverlay = new THREE.Mesh(geometry, wireframeMat);
   currentMesh.add(striminOverlay);
@@ -141,7 +144,7 @@ function updateBentuk() {
   const wireframeEdges = new THREE.LineSegments(edgesGeometry, lineMat);
   currentMesh.add(wireframeEdges);
 
-  // 4. Indicator Sumbu Lokal Kayu (X, Y, Z)
+  // 4. Indikator Sumbu Lokal Kayu (X, Y, Z)
   const objectAxes = new THREE.AxesHelper(Math.max(height * 0.4, 8));
   currentMesh.add(objectAxes);
 
