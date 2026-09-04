@@ -280,7 +280,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D --- */
+/* --- MODEL ALAT 3D (ORIENTASI BENAR MENANCAP KE KAYU) --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -347,7 +347,8 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
-    const up = new THREE.Vector3(0, -1, 0);
+    // KUNCI PERBAIKAN ORIENTASI: Vektor asal adalah (0, 1, 0) agar alat berdiri tegak menancap permukaan kayu
+    const up = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
@@ -470,55 +471,49 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMBUATAN RONGGA FISIK BEBAS CSG ERROR (100% GARANSI SUCCESS) --- */
+/* --- HASIL PEMOTONGAN RONGGA FISIK --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // Konversi titik lokasi hit ke koordinat lokal group kayu
   const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
 
   let cutMesh;
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x5a3210, // Warna penampang kayu bagian dalam (Cokelat Tua)
+    color: 0x5a3210,
     roughness: 0.9,
     metalness: 0.0
   });
 
   if (activeAlat === 'bor') {
-    // 1. LUBANG BOR SILINDER
     const radius = valDiameter / 2;
     const holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo.translate(0, valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else if (activeAlat === 'pahat') {
-    // 2. LUBANG PAHAT PERSEGI (2d x 2d)
     const sideSize = valDiameter * 2;
     const holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo.translate(0, valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
 
   } else {
-    // 3. IRISAN CELAH GERGAJI
     const holeGeo = new THREE.BoxGeometry(0.5, valDepth, 40);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    holeGeo.translate(0, valDepth / 2, 0);
 
     cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
   }
 
   cutMesh.position.copy(localHitPos);
   
-  // Samakan rotasi lokal alat terhadap kayu
   cutMesh.quaternion.copy(toolGroup.quaternion);
   cutMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
 
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Tambahkan garis outline penjelas oranye terang pada bekas lubang
   const cutEdges = new THREE.EdgesGeometry(cutMesh.geometry);
   const cutLineMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
@@ -529,7 +524,6 @@ function prosesCutterVisualResult(targetObj) {
 
 /* --- OVERLAY STRIMIN WIREFRAME --- */
 function rebuildOverlays(item) {
-  // Hanya bersihkan overlay lawas
   const toRemove = [];
   item.group.children.forEach(child => {
     if (child instanceof THREE.AxesHelper || child.isStrimin) {
@@ -538,7 +532,6 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // 1. Grid Strimin Wireframe Biru
   const striminMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -549,7 +542,6 @@ function rebuildOverlays(item) {
   striminMesh.isStrimin = true;
   item.group.add(striminMesh);
 
-  // 2. Outlines Edges
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   const edgeLine = new THREE.LineSegments(edgesGeometry, lineMat);
