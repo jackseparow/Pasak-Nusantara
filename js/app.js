@@ -1,10 +1,11 @@
 let scene, camera, renderer, controls;
-let transformControlsTranslate, transformControlsRotate;
+let transformControl;
+let activeGizmoMode = 'translate'; // 'translate', 'rotate', atau 'off'
 
 let bendaKerjaList = [];
 let selectedObjIndex = -1;
 let jenisBahanBaru = 'balok';
-let activeAlat = null; 
+let activeAlat = null; // 'gergaji', 'pahat', 'bor'
 let activeFase = 'pahat';
 
 let toolGroup = null;
@@ -35,30 +36,21 @@ function initThreeJS() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  transformControlsTranslate = new THREE.TransformControls(camera, renderer.domElement);
-  transformControlsTranslate.setMode('translate');
-  transformControlsTranslate.size = 0.75;
-  scene.add(transformControlsTranslate);
+  transformControl = new THREE.TransformControls(camera, renderer.domElement);
+  transformControl.size = 0.85;
+  scene.add(transformControl);
 
-  transformControlsRotate = new THREE.TransformControls(camera, renderer.domElement);
-  transformControlsRotate.setMode('rotate');
-  transformControlsRotate.size = 0.85;
-  scene.add(transformControlsRotate);
-
-  const disableOrbit = (event) => {
+  transformControl.addEventListener('dragging-changed', (event) => {
     controls.enabled = !event.value;
     const tooltip = document.getElementById('rotationTooltip');
-    if (event.value) {
+    if (activeGizmoMode === 'rotate' && event.value) {
       tooltip.style.display = 'block';
     } else {
       tooltip.style.display = 'none';
     }
-  };
+  });
 
-  transformControlsTranslate.addEventListener('dragging-changed', disableOrbit);
-  transformControlsRotate.addEventListener('dragging-changed', disableOrbit);
-
-  transformControlsRotate.addEventListener('change', syncRotationToUI);
+  transformControl.addEventListener('change', syncRotationToUI);
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -80,10 +72,31 @@ function initThreeJS() {
   animate();
 }
 
-/* --- REFRESH TARGET GIZMO PERGESERAN & ROTASI --- */
-function refreshGizmoTarget() {
-  let targetObj = null;
+/* --- TOMBOL SAKLAR GIZMO (GESER, ROTASI, RELEASE) --- */
+function setGizmoActiveMode(mode) {
+  activeGizmoMode = mode;
 
+  document.getElementById('btnToggleTranslate').classList.toggle('active', mode === 'translate');
+  document.getElementById('btnToggleRotate').classList.toggle('active', mode === 'rotate');
+  document.getElementById('btnToggleOff').classList.toggle('active', mode === 'off');
+
+  if (mode === 'off') {
+    transformControl.detach();
+    transformControl.visible = false;
+  } else {
+    transformControl.setMode(mode);
+    refreshGizmoTarget();
+  }
+}
+
+function refreshGizmoTarget() {
+  if (activeGizmoMode === 'off') {
+    transformControl.detach();
+    transformControl.visible = false;
+    return;
+  }
+
+  let targetObj = null;
   if (activeAlat && toolGroup) {
     targetObj = toolGroup;
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
@@ -91,19 +104,15 @@ function refreshGizmoTarget() {
   }
 
   if (targetObj) {
-    transformControlsTranslate.attach(targetObj);
-    transformControlsRotate.attach(targetObj);
-    transformControlsTranslate.visible = true;
-    transformControlsRotate.visible = true;
+    transformControl.attach(targetObj);
+    transformControl.visible = true;
   } else {
-    transformControlsTranslate.detach();
-    transformControlsRotate.detach();
-    transformControlsTranslate.visible = false;
-    transformControlsRotate.visible = false;
+    transformControl.detach();
+    transformControl.visible = false;
   }
 }
 
-/* --- SINKRONISASI ROTASI DENGAN UI --- */
+/* --- SINKRONISASI ROTASI SISI UI & TOOLTIP --- */
 function syncRotationToUI() {
   let targetObj = null;
   if (activeAlat && toolGroup) {
@@ -139,7 +148,7 @@ function updateObjekRotasiManual() {
   targetGroup.rotation.set(rx, ry, rz);
 }
 
-/* --- SELECT / DESELECT ALAT --- */
+/* --- MANAJEMEN ALAT KERJA --- */
 function toggleAlat(alat) {
   if (activeAlat === alat) {
     activeAlat = null;
@@ -152,7 +161,9 @@ function toggleAlat(alat) {
   document.getElementById('item-bor').classList.toggle('active', activeAlat === 'bor');
 
   const toolPanel = document.getElementById('toolOverlayPanel');
-  const drillRow = document.getElementById('rowDrillDiameter');
+  const rowDiameter = document.getElementById('rowToolDiameter');
+  const lblDiameter = document.getElementById('lblToolDiameter');
+  const hintText = document.getElementById('hintBoxText');
 
   if (activeAlat && activeFase === 'pahat') {
     const names = { gergaji: 'Gergaji', pahat: 'Pahat', bor: 'Bor' };
@@ -160,70 +171,93 @@ function toggleAlat(alat) {
     document.getElementById('toolOverlayIcon').innerText = icons[activeAlat];
     document.getElementById('toolOverlayName').innerText = `Kontrol ${names[activeAlat]}`;
     
-    drillRow.style.display = (activeAlat === 'bor') ? 'flex' : 'none';
-    toolPanel.style.display = 'block';
+    if (activeAlat === 'pahat') {
+      rowDiameter.style.display = 'flex';
+      lblDiameter.innerText = "Diameter Pahat (d):";
+      hintText.innerHTML = "🪛 <strong>Pahat Persegi:</strong> Klik titik pada kayu. Pahat akan membuat lubang persegi <strong>(2d × 2d)</strong> dari titik pusat tersebut.";
+    } else if (activeAlat === 'bor') {
+      rowDiameter.style.display = 'flex';
+      lblDiameter.innerText = "Diameter Bor (D):";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Klik titik pada permukaan kayu untuk menempatkan titik pusat bor.";
+    } else if (activeAlat === 'gergaji') {
+      rowDiameter.style.display = 'none';
+      hintText.innerHTML = "🪚 <strong>Gergaji Potong Penuh:</strong> Klik garis/permukaan pada kayu untuk memotong melintasi seluruh penampang.";
+    }
 
+    toolPanel.style.display = 'block';
     create3DTool();
     refreshGizmoTarget();
   } else {
     toolPanel.style.display = 'none';
+    hintText.innerHTML = "💡 Pilih benda kerja untuk mengedit ukuran, atau pilih Alat Pemahat di atas.";
     if (toolGroup) { scene.remove(toolGroup); toolGroup = null; }
     refreshGizmoTarget();
   }
 }
 
-/* --- MEMBUAT ALAT 3D --- */
-function create3DTool() {
+/* --- MEMBUAT MODEL ALAT 3D --- */
+function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
 
   toolGroup = new THREE.Group();
+  const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
+  const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  let bladeGeo;
-  if (activeAlat === 'gergaji') {
-    bladeGeo = new THREE.BoxGeometry(0.2, 6, 12);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
-    cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
+  if (activeAlat === 'pahat') {
+    // Pahat: Persegi (2d x 2d)
+    const sideSize = valDiameter * 2;
+    const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
+    const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
+    cutterGeometryMesh = new THREE.Mesh(chiselGeo, chiselMat);
 
-    const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 3);
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
+    const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 4, 12);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
     const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.set(0, 3, -6);
+    handle.position.set(0, (valDepth / 2) + 2, 0);
 
     toolGroup.add(cutterGeometryMesh);
     toolGroup.add(handle);
 
-  } else if (activeAlat === 'pahat') {
-    bladeGeo = new THREE.BoxGeometry(1.2, 8, 1.2);
-    const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.9, roughness: 0.1 });
-    cutterGeometryMesh = new THREE.Mesh(bladeGeo, chiselMat);
+  } else if (activeAlat === 'gergaji') {
+    // Gergaji: Potong penuh
+    const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
+    cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
 
-    const handleGeo = new THREE.CylinderGeometry(0.6, 0.5, 4, 12);
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+    const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 4);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
     const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.set(0, 5, 0);
+    handle.position.set(0, (valDepth / 2) + 1.25, -15);
 
     toolGroup.add(cutterGeometryMesh);
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
-    const drillDiameter = parseFloat(document.getElementById('toolDrillDiameter').value) || 2;
-    const radius = drillDiameter / 2;
-
-    bladeGeo = new THREE.CylinderGeometry(radius, radius, 10, 24);
+    // Bor: Silinder
+    const radius = valDiameter / 2;
+    const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 24);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
-    cutterGeometryMesh = new THREE.Mesh(bladeGeo, drillMat);
+    cutterGeometryMesh = new THREE.Mesh(drillGeo, drillMat);
 
-    const headGeo = new THREE.BoxGeometry(Math.max(2, drillDiameter + 0.5), 3, Math.max(2, drillDiameter + 0.5));
+    const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 6, 0);
+    head.position.set(0, (valDepth / 2) + 1.5, 0);
 
     toolGroup.add(cutterGeometryMesh);
     toolGroup.add(head);
   }
 
-  if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
+  // Penempatan Posisi Alat
+  if (positionPoint && normalVector) {
+    toolGroup.position.copy(positionPoint);
+    
+    // Orientasi Alat Sesuai Vektor Normal Permukaan
+    const up = new THREE.Vector3(0, 1, 0);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
+    toolGroup.quaternion.copy(quaternion);
+  } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
     toolGroup.position.y += 8;
   } else {
@@ -231,23 +265,24 @@ function create3DTool() {
   }
 
   scene.add(toolGroup);
-  updateAlatTransform();
 }
 
 function updateAlatTransform() {
-  if (!toolGroup) return;
+  if (!toolGroup || !activeAlat) return;
+  const currentPos = toolGroup.position.clone();
+  const currentRot = toolGroup.rotation.clone();
 
-  if (activeAlat === 'bor') {
-    create3DTool();
+  create3DTool();
+
+  if (toolGroup) {
+    toolGroup.position.copy(currentPos);
+    toolGroup.rotation.copy(currentRot);
   }
-
-  const depth = parseFloat(document.getElementById('toolDepth').value) || 6;
-  toolGroup.scale.set(1, depth / 6, 1);
 }
 
-/* --- INTERAKSI SELEKSI --- */
+/* --- INTERAKSI KLIK DIRECT POINT/EDGE SELECTION --- */
 function onViewportClick(event) {
-  if (event.target.tagName !== 'CANVAS' || transformControlsTranslate.dragging || transformControlsRotate.dragging) return;
+  if (event.target.tagName !== 'CANVAS' || transformControl.dragging) return;
 
   const container = document.getElementById('viewport');
   const rect = container.getBoundingClientRect();
@@ -263,14 +298,22 @@ function onViewportClick(event) {
   const intersects = raycaster.intersectObjects(targetMeshes);
 
   if (intersects.length > 0) {
-    const parentGroup = intersects[0].object.parent;
+    const hit = intersects[0];
+    const parentGroup = hit.object.parent;
     const foundIndex = bendaKerjaList.findIndex(b => b.group === parentGroup);
-    
+
     if (foundIndex !== -1) {
-      if (selectedObjIndex === foundIndex && !activeAlat) {
-        pilihBendaKerja(-1);
-      } else {
+      if (selectedObjIndex !== foundIndex) {
         pilihBendaKerja(foundIndex);
+      }
+
+      // Jika Alat Aktif -> Tempatkan Alat Tepat di Titik/Garis Klik
+      if (activeAlat && hit.point && hit.face) {
+        const point = hit.point;
+        const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion);
+
+        create3DTool(point, normal);
+        refreshGizmoTarget();
       }
     }
   } else if (!activeAlat) {
@@ -278,7 +321,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- OPERASI PEMOTONGAN CSG --- */
+/* --- EKSEKUSI PEMOTONGAN CSG --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -437,7 +480,7 @@ function trianglesShareVertex(t1, t2, threshold = 0.0001) {
   return false;
 }
 
-/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT --- */
+/* --- REBUILD OVERLAYS DENGAN STRIMIN --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -483,9 +526,9 @@ function tambahBendaKerja() {
     id: Date.now(),
     nama: isBalok ? `Kayu Balok #${index}` : `Pasak Silinder #${index}`,
     jenis: jenisBahanBaru,
-    p: isBalok ? 10 : 25, // p digunakan sebagai Tinggi (H) jika Silinder
+    p: isBalok ? 10 : 25,
     l: 10,
-    t: isBalok ? 30 : 6,  // t digunakan sebagai Diameter (D) jika Silinder
+    t: isBalok ? 30 : 6,
     opacity: 1.0,
     group: new THREE.Group(),
     mainMesh: null,
@@ -515,7 +558,6 @@ function hapusBendaKerja(index, event) {
   }
 }
 
-/* --- SELEKSI BENDA KERJA & PENYESUAIAN PANEL KHUSUS SILINDER --- */
 function pilihBendaKerja(index) {
   selectedObjIndex = index;
   const controlsDiv = document.getElementById('selectedObjectControls');
@@ -537,8 +579,8 @@ function pilihBendaKerja(index) {
       groupBalok.style.display = 'none';
       groupSilinder.style.display = 'flex';
 
-      document.getElementById('objDiameter').value = item.t;        // Diameter (D)
-      document.getElementById('objTinggiSilinder').value = item.p;   // Tinggi (H)
+      document.getElementById('objDiameter').value = item.t;
+      document.getElementById('objTinggiSilinder').value = item.p;
     }
 
     document.getElementById('objOpacity').value = item.opacity;
@@ -586,8 +628,8 @@ function updateObjekTerpilih() {
     item.l = Math.max(1, Math.round(parseFloat(document.getElementById('objL').value) || 10));
     item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objT').value) || 30));
   } else {
-    item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objDiameter').value) || 6));        // Diameter (D)
-    item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objTinggiSilinder').value) || 25)); // Tinggi (H)
+    item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objDiameter').value) || 6));
+    item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objTinggiSilinder').value) || 25));
   }
 
   item.opacity = parseFloat(document.getElementById('objOpacity').value);
@@ -622,8 +664,8 @@ function updateObjekMesh(item) {
     height = item.t;
     geometry = new THREE.BoxGeometry(item.p, item.t, item.l, item.p, item.t, item.l);
   } else {
-    height = item.p; // Tinggi Silinder
-    const radius = item.t / 2; // Diameter / 2
+    height = item.p;
+    const radius = item.t / 2;
     geometry = new THREE.CylinderGeometry(radius, radius, item.p, 24, item.p);
   }
 
