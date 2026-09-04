@@ -1,5 +1,7 @@
 let scene, camera, renderer, controls;
-let transformControlsTranslate, transformControlsRotate;
+let transformControl; // Satu kontrol utama terpadu
+let activeGizmoMode = 'translate'; // 'translate', 'rotate', atau 'off'
+
 let bendaKerjaList = [];
 let selectedObjIndex = -1;
 let jenisBahanBaru = 'balok';
@@ -30,30 +32,20 @@ function initThreeJS() {
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
 
-  // Orbit Controls (Navigasi Kamera Utama)
   controls = new THREE.OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  // 1. Indikator Panah Pergeseran 3D di Titik Pusat
-  transformControlsTranslate = new THREE.TransformControls(camera, renderer.domElement);
-  transformControlsTranslate.setMode('translate');
-  transformControlsTranslate.size = 0.75;
-  scene.add(transformControlsTranslate);
+  // Inisialisasi TransformControls
+  transformControl = new THREE.TransformControls(camera, renderer.domElement);
+  transformControl.size = 0.85;
+  scene.add(transformControl);
 
-  // 2. Indikator Ring Perputaran Sudut 3D di Titik Pusat yang Sama
-  transformControlsRotate = new THREE.TransformControls(camera, renderer.domElement);
-  transformControlsRotate.setMode('rotate');
-  transformControlsRotate.size = 0.85; // Ukuran sedikit lebih besar agar melingkupi panah pergeseran
-  scene.add(transformControlsRotate);
+  transformControl.addEventListener('dragging-changed', (event) => {
+    controls.enabled = !event.value;
+  });
 
-  // Matikan OrbitControls saat pengguna menggeser atau memutar objek dengan mouse
-  const disableOrbit = (event) => { controls.enabled = !event.value; };
-  transformControlsTranslate.addEventListener('dragging-changed', disableOrbit);
-  transformControlsRotate.addEventListener('dragging-changed', disableOrbit);
-
-  // Update nilai sudut di UI secara real-time saat ring rotasi diputar
-  transformControlsRotate.addEventListener('change', syncRotationToUI);
+  transformControl.addEventListener('change', syncRotationToUI);
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
@@ -75,22 +67,43 @@ function initThreeJS() {
   animate();
 }
 
-/* --- MENAMPILKAN VISUAL PERGESERAN & PERPUTARAN SECARA BERSAMAAN --- */
-function attachGizmos(targetObject) {
-  if (targetObject) {
-    transformControlsTranslate.attach(targetObject);
-    transformControlsRotate.attach(targetObject);
-    transformControlsTranslate.visible = true;
-    transformControlsRotate.visible = true;
+/* --- MANAJEMEN MODE GIZMO AKTIF --- */
+function setGizmoActiveMode(mode) {
+  activeGizmoMode = mode;
+
+  document.getElementById('btnToggleTranslate').classList.toggle('active', mode === 'translate');
+  document.getElementById('btnToggleRotate').classList.toggle('active', mode === 'rotate');
+  document.getElementById('btnToggleOff').classList.toggle('active', mode === 'off');
+
+  if (mode === 'off') {
+    transformControl.detach();
+    transformControl.visible = false;
   } else {
-    transformControlsTranslate.detach();
-    transformControlsRotate.detach();
-    transformControlsTranslate.visible = false;
-    transformControlsRotate.visible = false;
+    transformControl.setMode(mode);
+    refreshGizmoTarget();
   }
 }
 
-/* --- SINKRONISASI MANUSIA <-> MOUSE (NILAI ROTASI) --- */
+function refreshGizmoTarget() {
+  if (activeGizmoMode === 'off') {
+    transformControl.detach();
+    transformControl.visible = false;
+    return;
+  }
+
+  if (activeAlat && toolGroup) {
+    transformControl.attach(toolGroup);
+    transformControl.visible = true;
+  } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
+    transformControl.attach(bendaKerjaList[selectedObjIndex].group);
+    transformControl.visible = true;
+  } else {
+    transformControl.detach();
+    transformControl.visible = false;
+  }
+}
+
+/* --- SINKRONISASI ROTASI KE UI --- */
 function syncRotationToUI() {
   let targetObj = null;
   if (activeAlat && toolGroup) {
@@ -124,9 +137,9 @@ function updateObjekRotasiManual() {
 /* --- SELECT / DESELECT ALAT --- */
 function toggleAlat(alat) {
   if (activeAlat === alat) {
-    activeAlat = null; // Deselect
+    activeAlat = null;
   } else {
-    activeAlat = alat; // Select
+    activeAlat = alat;
   }
 
   document.getElementById('item-gergaji').classList.toggle('active', activeAlat === 'gergaji');
@@ -142,16 +155,11 @@ function toggleAlat(alat) {
     toolPanel.style.display = 'block';
 
     create3DTool();
-    pilihBendaKerja(selectedObjIndex, false);
-    attachGizmos(toolGroup);
+    refreshGizmoTarget();
   } else {
     toolPanel.style.display = 'none';
     if (toolGroup) { scene.remove(toolGroup); toolGroup = null; }
-    if (selectedObjIndex >= 0) {
-      attachGizmos(bendaKerjaList[selectedObjIndex].group);
-    } else {
-      attachGizmos(null);
-    }
+    refreshGizmoTarget();
   }
 }
 
@@ -202,9 +210,9 @@ function create3DTool() {
     toolGroup.add(head);
   }
 
-  if (selectedObjIndex >= 0) {
+  if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
-    toolGroup.position.y += 10;
+    toolGroup.position.y += 8;
   } else {
     toolGroup.position.set(0, 15, 0);
   }
@@ -219,9 +227,9 @@ function updateAlatTransform() {
   toolGroup.scale.set(1, depth / 4, 1);
 }
 
-/* --- INTERAKSI KLIK & SELEKSI --- */
+/* --- INTERAKSI KLIK SELEKSI --- */
 function onViewportClick(event) {
-  if (event.target.tagName !== 'CANVAS' || transformControlsTranslate.dragging || transformControlsRotate.dragging) return;
+  if (event.target.tagName !== 'CANVAS' || transformControl.dragging) return;
 
   const container = document.getElementById('viewport');
   const rect = container.getBoundingClientRect();
@@ -242,17 +250,17 @@ function onViewportClick(event) {
     
     if (foundIndex !== -1) {
       if (selectedObjIndex === foundIndex && !activeAlat) {
-        pilihBendaKerja(-1); // Deselect
+        pilihBendaKerja(-1);
       } else {
         pilihBendaKerja(foundIndex);
       }
     }
   } else if (!activeAlat) {
-    pilihBendaKerja(-1); // Deselect di ruang kosong
+    pilihBendaKerja(-1);
   }
 }
 
-/* --- OPERASI PEMOTONGAN CSG NYATA --- */
+/* --- OPERASI PEMOTONGAN CSG NYATA & PEMISAHAN BENDA KERJA --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -276,6 +284,7 @@ function eksekusiPemotongan() {
     const csgTarget = THREE.CSG.fromMesh(targetObj.mainMesh);
     const csgCutter = THREE.CSG.fromMesh(cutterMeshWorld);
 
+    // Operasi Potong
     const csgResult = csgTarget.subtract(csgCutter);
     const newMeshResult = THREE.CSG.toMesh(csgResult, targetObj.mainMesh.matrix);
 
@@ -283,19 +292,140 @@ function eksekusiPemotongan() {
     newMeshResult.castShadow = true;
     newMeshResult.receiveShadow = true;
 
-    targetObj.group.remove(targetObj.mainMesh);
-    targetObj.mainMesh = newMeshResult;
-    targetObj.group.add(targetObj.mainMesh);
+    // Cek apakah hasil pemotongan menghasilkan geometri terpisah (2 bagian)
+    const separatedGeometries = splitDisconnectedGeometries(newMeshResult.geometry);
 
-    rebuildOverlays(targetObj);
+    if (separatedGeometries.length > 1) {
+      // 1. TERJADI PEMISAHAN MENJADI 2 BAGIAN BENDA KERJA
+      scene.remove(targetObj.group);
+      const parentName = targetObj.nama;
+      const parentGroupPos = targetObj.group.position.clone();
+      const parentGroupRot = targetObj.group.rotation.clone();
 
-    alert(`Pemotongan CSG Berhasil pada ${targetObj.nama}!`);
+      // Hapus item lama dari array
+      bendaKerjaList.splice(selectedObjIndex, 1);
+
+      separatedGeometries.forEach((subGeo, idx) => {
+        const subMesh = new THREE.Mesh(subGeo, targetObj.mainMesh.material);
+        subMesh.castShadow = true;
+        subMesh.receiveShadow = true;
+
+        const newGroup = new THREE.Group();
+        newGroup.position.copy(parentGroupPos);
+        newGroup.rotation.copy(parentGroupRot);
+        newGroup.add(subMesh);
+
+        const suffix = String.fromCharCode(65 + idx); // Bagian A, B, dst.
+        const newObjData = {
+          id: Date.now() + idx,
+          nama: `${parentName} (${suffix})`,
+          jenis: targetObj.jenis,
+          p: targetObj.p,
+          l: targetObj.l,
+          t: targetObj.t,
+          opacity: targetObj.opacity,
+          group: newGroup,
+          mainMesh: subMesh,
+          hasBeenCut: true
+        };
+
+        rebuildOverlays(newObjData);
+        scene.add(newGroup);
+        bendaKerjaList.push(newObjData);
+      });
+
+      alert(`Sukses! ${parentName} terbelah menjadi ${separatedGeometries.length} bagian benda kerja terpisah.`);
+      pilihBendaKerja(bendaKerjaList.length - 2);
+
+    } else {
+      // 2. PEMOTONGAN BIASA (LUBANG / TAKIKAN)
+      targetObj.group.remove(targetObj.mainMesh);
+      targetObj.mainMesh = newMeshResult;
+      targetObj.group.add(targetObj.mainMesh);
+      targetObj.hasBeenCut = true;
+
+      rebuildOverlays(targetObj);
+      alert(`Pemotongan CSG Berhasil pada ${targetObj.nama}!`);
+    }
+
   } catch (err) {
     console.error("CSG Error:", err);
-    alert("Proses pemotongan gagal. Pastikan posisi alat menempel pada benda kerja.");
+    alert("Proses pemotongan gagal. Pastikan posisi alat menempel tepat pada benda kerja.");
   }
 }
 
+/* --- PEMISAHAN GEOMETRI CSG TERPUTUS (SPLIT SUB-MESHES) --- */
+function splitDisconnectedGeometries(geometry) {
+  const nonIndexedGeo = geometry.toNonIndexed();
+  const posAttr = nonIndexedGeo.attributes.position;
+  const triangleCount = posAttr.count / 3;
+
+  const triangles = [];
+  for (let i = 0; i < triangleCount; i++) {
+    triangles.push([
+      new THREE.Vector3().fromBufferAttribute(posAttr, i * 3),
+      new THREE.Vector3().fromBufferAttribute(posAttr, i * 3 + 1),
+      new THREE.Vector3().fromBufferAttribute(posAttr, i * 3 + 2)
+    ]);
+  }
+
+  const visited = new Array(triangleCount).fill(false);
+  const groups = [];
+
+  for (let i = 0; i < triangleCount; i++) {
+    if (visited[i]) continue;
+
+    const currentGroup = [];
+    const queue = [i];
+    visited[i] = true;
+
+    while (queue.length > 0) {
+      const currIdx = queue.pop();
+      currentGroup.push(triangles[currIdx]);
+
+      const t1 = triangles[currIdx];
+
+      for (let j = 0; j < triangleCount; j++) {
+        if (visited[j]) continue;
+        const t2 = triangles[j];
+
+        if (trianglesShareVertex(t1, t2)) {
+          visited[j] = true;
+          queue.push(j);
+        }
+      }
+    }
+
+    groups.push(currentGroup);
+  }
+
+  if (groups.length <= 1) return [geometry];
+
+  return groups.map(groupTriangles => {
+    const positions = [];
+    groupTriangles.forEach(tri => {
+      positions.push(tri[0].x, tri[0].y, tri[0].z);
+      positions.push(tri[1].x, tri[1].y, tri[1].z);
+      positions.push(tri[2].x, tri[2].y, tri[2].z);
+    });
+
+    const newGeo = new THREE.BufferGeometry();
+    newGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    newGeo.computeVertexNormals();
+    return newGeo;
+  });
+}
+
+function trianglesShareVertex(t1, t2, threshold = 0.0001) {
+  for (let a = 0; a < 3; a++) {
+    for (let b = 0; b < 3; b++) {
+      if (t1[a].distanceTo(t2[b]) < threshold) return true;
+    }
+  }
+  return false;
+}
+
+/* --- REBUILD OVERLAYS DENGAN GARIS TEBAL/ORANYE BEKAS ALAT --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -305,9 +435,18 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
+  // Edges standar biru muda
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
+
+  // Visual Bekas Potongan (Warna Oranye Terang / Highlighting)
+  if (item.hasBeenCut) {
+    const cutEdgesMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
+    const cutHighlight = new THREE.LineSegments(edgesGeometry, cutEdgesMat);
+    cutHighlight.scale.set(1.002, 1.002, 1.002); // Sedikit membesar agar terlihat timbul
+    item.group.add(cutHighlight);
+  }
 }
 
 /* --- MANAJEMEN BENDA KERJA --- */
@@ -330,7 +469,8 @@ function tambahBendaKerja() {
     t: isBalok ? 30 : 4,
     opacity: 1.0,
     group: new THREE.Group(),
-    mainMesh: null
+    mainMesh: null,
+    hasBeenCut: false
   };
 
   const offsetX = (bendaKerjaList.length) * 12;
@@ -343,7 +483,7 @@ function tambahBendaKerja() {
 }
 
 function hapusBendaKerja(index, event) {
-  event.stopPropagation();
+  if (event) event.stopPropagation();
   scene.remove(bendaKerjaList[index].group);
   bendaKerjaList.splice(index, 1);
 
@@ -356,7 +496,7 @@ function hapusBendaKerja(index, event) {
   }
 }
 
-function pilihBendaKerja(index, attachGizmo = true) {
+function pilihBendaKerja(index) {
   selectedObjIndex = index;
   const controlsDiv = document.getElementById('selectedObjectControls');
 
@@ -372,15 +512,10 @@ function pilihBendaKerja(index, attachGizmo = true) {
     controlsDiv.style.display = 'block';
 
     if (!item.mainMesh) updateObjekMesh(item);
-
-    if (attachGizmo && !activeAlat) {
-      attachGizmos(item.group);
-    }
+    refreshGizmoTarget();
   } else {
     controlsDiv.style.display = 'none';
-    if (attachGizmo && !activeAlat) {
-      attachGizmos(null);
-    }
+    refreshGizmoTarget();
   }
 
   renderObjectListUI();
@@ -456,7 +591,7 @@ function updateObjekMesh(item) {
   item.mainMesh.receiveShadow = true;
   group.add(item.mainMesh);
 
-  // Strimin Wireframe Overlay
+  // Wireframe Strimin
   const wireframeMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -465,9 +600,7 @@ function updateObjekMesh(item) {
   });
   group.add(new THREE.Mesh(geometry, wireframeMat));
 
-  const edgesGeometry = new THREE.EdgesGeometry(geometry);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
-  group.add(new THREE.LineSegments(edgesGeometry, lineMat));
+  rebuildOverlays(item);
 
   const objectAxes = new THREE.AxesHelper(Math.max(height * 0.3, 6));
   group.add(objectAxes);
