@@ -75,9 +75,7 @@ function initThreeJS() {
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
 
-  // Memastikan ukuran canvas langsung pas saat pertama kali dimuat
   onWindowResize();
-
   animate();
 }
 
@@ -283,7 +281,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D (PIVOT DIUBAH TEPAT DI UJUNG MATA POTONG) --- */
+/* --- MODEL ALAT 3D (PIVOT DI UJUNG MATA POTONG) --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -298,18 +296,18 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
 
-    // Ujung Kerucut Mata Bor (Titik paling ujung berada di Y = 0)
+    // Ujung Kerucut Bor (Posisikan di Y = 0)
     const tipGeo = new THREE.ConeGeometry(radius, tipHeight, 32);
     tipGeo.rotateX(Math.PI);
     tipGeo.translate(0, tipHeight / 2, 0);
     const tipMesh = new THREE.Mesh(tipGeo, drillMat);
 
-    // Batang Bor Silinder (Mulai dari Y = tipHeight ke atas)
+    // Batang Bor Silinder
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     drillGeo.translate(0, tipHeight + (valDepth / 2), 0);
     const mainDrill = new THREE.Mesh(drillGeo, drillMat);
 
-    // Kepala Bor / Chuck
+    // Kepala Bor
     const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
     headGeo.translate(0, tipHeight + valDepth + 1.5, 0);
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
@@ -322,7 +320,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
     
-    // Mata Pahat Pipih (Ujung mata pahat persis di Y = 0)
+    // Mata Pahat (Ujung di Y = 0)
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     chiselGeo.translate(0, valDepth / 2, 0);
 
@@ -345,7 +343,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
       targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
     }
 
-    // Bilah Gergaji (Mata gergaji bagian bawah persis di Y = 0)
+    // Bilah Gergaji (Mata di Y = 0)
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, targetSpan);
     bladeGeo.translate(0, valDepth / 2, 0);
 
@@ -362,7 +360,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
   }
 
-  // MENEMPATKAN UJUNG ALAT PERSIS PADA TITIK KLIK
+  // MENEMPATKAN UJUNG ALAT PERSIS DI TITIK KLIK
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
 
@@ -446,22 +444,6 @@ function eksekusiPemotongan() {
   isCuttingAnimation = true;
   transformControl.detach();
 
-  // 1. HITUNG TEBAL BAHAN SEBAGAI BATAS MAKSIMAL
-  let maxThickness = 30;
-  if (targetObj.jenis === 'balok') {
-    const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
-    if (localNormal.y > 0.5) maxThickness = targetObj.t;
-    else if (localNormal.x > 0.5) maxThickness = targetObj.p;
-    else maxThickness = targetObj.l;
-  } else {
-    maxThickness = targetObj.t;
-  }
-
-  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
-  
-  // IF-THEN: BATASI KEDALAMAN MAKSIMAL SEUKURAN TEBAL BAHAN
-  const effectiveDepth = Math.min(valDepthInput, maxThickness);
-
   const startPos = toolGroup.position.clone();
   const startRot = toolGroup.quaternion.clone();
   let startTime = performance.now();
@@ -475,22 +457,22 @@ function eksekusiPemotongan() {
       triggerWoodSparks(toolGroup.position);
     }
 
-    const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * effectiveDepth, 0).applyQuaternion(startRot);
-
     if (activeAlat === 'bor') {
       toolGroup.quaternion.copy(startRot);
       toolGroup.rotateY(progress * Math.PI * 20);
+
+      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'gergaji') {
-      const stroke = Math.sin(progress * Math.PI * 10) * 2;
+      const stroke = Math.sin(progress * Math.PI * 10) * 3;
       const forwardVec = new THREE.Vector3(0, 0, stroke).applyQuaternion(startRot);
-      toolGroup.position.copy(startPos).add(depthOffset).add(forwardVec);
+      toolGroup.position.copy(startPos).add(forwardVec);
 
     } else if (activeAlat === 'pahat') {
-      const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.0;
+      const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
       const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(startRot);
-      toolGroup.position.copy(startPos).add(depthOffset).add(hammerVec);
+      toolGroup.position.copy(startPos).add(hammerVec);
     }
 
     if (progress < 1.0) {
@@ -499,7 +481,7 @@ function eksekusiPemotongan() {
       toolGroup.position.copy(startPos);
       toolGroup.quaternion.copy(startRot);
 
-      prosesCSGSubtractionMurni(targetObj, effectiveDepth);
+      prosesCutterVisualResult(targetObj);
       isCuttingAnimation = false;
       refreshGizmoTarget();
     }
@@ -508,58 +490,80 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- CSG SUBTRACTION MURNI (MEMOTONG GEOMETRI ASLI TANPA MENONJOL) --- */
-function prosesCSGSubtractionMurni(targetObj, effectiveDepth) {
+/* --- HASIL RONGGA FISIK BERLUBANG (PEMBATASAN DENGAN TEBAL BAHAN) --- */
+function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
+  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  let cutterGeo;
+  // 1. DETEKSI KETEBALAN FISIK BAHAN PADA SISI YANG TERKENA KLIK
+  let maxThickness = 30;
+  if (targetObj.jenis === 'balok') {
+    const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
+    if (localNormal.y > 0.5) maxThickness = targetObj.t;
+    else if (localNormal.x > 0.5) maxThickness = targetObj.p;
+    else maxThickness = targetObj.l;
+  } else {
+    maxThickness = targetObj.t; // Diameter silinder
+  }
+
+  // 2. PEMBATASAN OTOMATIS: KEDALAMAN POTONG DIPAKSA BERHENTI TEPAT DI TEBAL BAHAN
+  const effectiveDepth = Math.min(valDepthInput, maxThickness);
+  const isThruHole = (valDepthInput >= maxThickness);
+
+  const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
+
+  let holeGeo;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    cutterGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32);
-    cutterGeo.translate(0, -effectiveDepth / 2, 0);
+    // openEnded = isThruHole (jika tembus penuh, tutup dibuka agar berlubang tembus pandang)
+    holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32, 1, isThruHole);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
-    cutterGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
-    cutterGeo.translate(0, -effectiveDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
 
   } else { // gergaji
     let targetSpan = 12;
     if (targetObj.jenis === 'balok') {
-      targetSpan = targetObj.l * 1.05;
+      targetSpan = targetObj.l * 1.02;
     } else {
-      targetSpan = targetObj.t * 1.05;
+      targetSpan = targetObj.t * 1.02;
     }
 
-    cutterGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
-    cutterGeo.translate(0, -effectiveDepth / 2, 0);
+    holeGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
+    holeGeo.translate(0, -effectiveDepth / 2, 0);
   }
 
-  const cutterMat = new THREE.MeshBasicMaterial();
-  const cutterMesh = new THREE.Mesh(cutterGeo, cutterMat);
-
-  cutterMesh.position.copy(toolGroup.position);
-  cutterMesh.quaternion.copy(toolGroup.quaternion);
-
-  // Material kayu (DoubleSide agar bagian dalam berlubang tampak nyata)
-  const woodMat = new THREE.MeshStandardMaterial({
-    color: 0xc28e0e,
-    roughness: 0.6,
-    metalness: 0.1,
-    side: THREE.DoubleSide
+  // 3. MATERIAL RONGGA DALAM (SISI GANDA & PENANGANAN Z-INDEX MURNI BERLUBANG)
+  const innerWoodMat = new THREE.MeshStandardMaterial({
+    color: 0x1f0f02, // Cokelat tua serat dalam kayu
+    roughness: 0.9,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
   });
 
-  // MEMANGGIL ENGINE CSG DARI JS/CSG.JS
-  const newMesh = window.CSGEngine.subtract(targetObj.mainMesh, cutterMesh, woodMat);
+  const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
+  cutMesh.position.copy(localHitPos);
+  
+  cutMesh.quaternion.copy(toolGroup.quaternion);
+  cutMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
 
-  if (newMesh) {
-    targetObj.group.remove(targetObj.mainMesh);
-    targetObj.mainMesh = newMesh;
-    targetObj.group.add(targetObj.mainMesh);
-    targetObj.hasBeenCut = true;
-    rebuildOverlays(targetObj);
-  }
+  targetObj.group.add(cutMesh);
+  targetObj.hasBeenCut = true;
+
+  // Garis Neon Oranye Penegas Rongga Lubang
+  const cutEdges = new THREE.EdgesGeometry(holeGeo);
+  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
+  const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
+  cutMesh.add(cutLineSegments);
+
+  rebuildOverlays(targetObj);
 }
 
 /* --- OVERLAY STRIMIN WIREFRAME --- */
@@ -730,8 +734,7 @@ function updateObjekMesh(item) {
     roughness: 0.6,
     metalness: 0.1,
     transparent: isTransparent,
-    opacity: item.opacity,
-    side: THREE.DoubleSide
+    opacity: item.opacity
   });
 
   let height = item.t;
