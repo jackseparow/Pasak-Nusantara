@@ -354,8 +354,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
 
-    // DENGAN (0,0,0) DI LOKASI MATA ALAT:
-    // Menempelkan tegak lurus pada bidang kerja aktif
     const up = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
@@ -441,7 +439,6 @@ function eksekusiPemotongan() {
   let startTime = performance.now();
   const duration = 1200;
 
-  // Sumbu Y Lokal Alat untuk Rotasi Presisi Bor
   const localYAxis = new THREE.Vector3(0, 1, 0);
 
   function animateToolAction(now) {
@@ -453,7 +450,6 @@ function eksekusiPemotongan() {
     }
 
     if (activeAlat === 'bor') {
-      // 1. ROTASI BOR PADA SUMBU LOKAL (Sempurna di semua kemiringan bidang)
       toolGroup.quaternion.copy(startRot);
       toolGroup.rotateOnAxis(localYAxis, progress * Math.PI * 20);
 
@@ -486,7 +482,7 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA FISIK BERLUBANG (TIDAK AKAN MENONJOL JIKA TEMBUS) --- */
+/* --- HASIL RONGGA FISIK BEBAS EROR (JEJAK VISUAL TEPAT & KELIHATAN JELAS) --- */
 function prosesCutterVisualResult(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
@@ -517,12 +513,15 @@ function prosesCutterVisualResult(targetObj) {
     holeGeo.translate(0, -valDepth / 2, 0);
   }
 
-  // Material Dinding Rongga Dalam Kayu (DoubleSide & BackSide Rendering agar tampak bolong asli)
+  // MATERIAL PERBAIKAN: DoubleSide + PolygonOffset agar rongga terlihat menembus kayu dari semua sisi
   const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x3d2008, // Cokelat kayu gelap berlubang
-    roughness: 0.9,
-    metalness: 0.0,
-    side: THREE.BackSide
+    color: 0x2b1504, // Warna kayu bagian dalam (Cokelat Tua Berlubang)
+    roughness: 0.8,
+    metalness: 0.1,
+    side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1
   });
 
   const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
@@ -534,9 +533,9 @@ function prosesCutterVisualResult(targetObj) {
   targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
 
-  // Outlines Garis Batas Lubang Oranye
+  // Garis Tepi Neon Oranye sebagai Batas Fisik Lubang Tembus
   const cutEdges = new THREE.EdgesGeometry(holeGeo);
-  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
+  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
   const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
   cutMesh.add(cutLineSegments);
 
