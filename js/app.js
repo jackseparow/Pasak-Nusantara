@@ -72,7 +72,7 @@ function initThreeJS() {
   animate();
 }
 
-/* --- TOMBOL SAKLAR GIZMO (GESER, ROTASI, RELEASE) --- */
+/* --- TOMBOL SAKLAR GIZMO --- */
 function setGizmoActiveMode(mode) {
   activeGizmoMode = mode;
 
@@ -112,7 +112,7 @@ function refreshGizmoTarget() {
   }
 }
 
-/* --- SINKRONISASI ROTASI SISI UI & TOOLTIP --- */
+/* --- SINKRONISASI ROTASI SISI UI --- */
 function syncRotationToUI() {
   let targetObj = null;
   if (activeAlat && toolGroup) {
@@ -205,7 +205,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
   if (activeAlat === 'pahat') {
-    // Pahat: Persegi (2d x 2d)
     const sideSize = valDiameter * 2;
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
@@ -220,7 +219,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
-    // Gergaji: Potong penuh
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
@@ -234,7 +232,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
-    // Bor: Silinder
     const radius = valDiameter / 2;
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 24);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
@@ -249,11 +246,8 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(head);
   }
 
-  // Penempatan Posisi Alat
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
-    
-    // Orientasi Alat Sesuai Vektor Normal Permukaan
     const up = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
@@ -280,7 +274,7 @@ function updateAlatTransform() {
   }
 }
 
-/* --- INTERAKSI KLIK DIRECT POINT/EDGE SELECTION --- */
+/* --- INTERAKSI KLIK POINT SELECTION --- */
 function onViewportClick(event) {
   if (event.target.tagName !== 'CANVAS' || transformControl.dragging) return;
 
@@ -307,7 +301,6 @@ function onViewportClick(event) {
         pilihBendaKerja(foundIndex);
       }
 
-      // Jika Alat Aktif -> Tempatkan Alat Tepat di Titik/Garis Klik
       if (activeAlat && hit.point && hit.face) {
         const point = hit.point;
         const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion);
@@ -321,7 +314,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- EKSEKUSI PEMOTONGAN CSG --- */
+/* --- EKSEKUSI PEMOTONGAN CSG & VISUAL JEJAK --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -480,7 +473,7 @@ function trianglesShareVertex(t1, t2, threshold = 0.0001) {
   return false;
 }
 
-/* --- REBUILD OVERLAYS DENGAN STRIMIN --- */
+/* --- REBUILD OVERLAYS STRIMIN & JEJAK POTONGAN (ORANGE HIGHLIGHT) --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -490,6 +483,7 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
+  // 1. Mesh Strimin Wireframe Biru
   const striminMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -499,14 +493,16 @@ function rebuildOverlays(item) {
   const striminMesh = new THREE.Mesh(item.mainMesh.geometry, striminMat);
   item.group.add(striminMesh);
 
+  // 2. Outlines Edges Standar
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
 
+  // 3. Visual Jejak Benda Terkena Alat (Tebal & Oranye Terang)
   if (item.hasBeenCut) {
     const cutEdgesMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
     const cutHighlight = new THREE.LineSegments(edgesGeometry, cutEdgesMat);
-    cutHighlight.scale.set(1.002, 1.002, 1.002);
+    cutHighlight.scale.set(1.002, 1.002, 1.002); // Timbul sedikit agar kontras
     item.group.add(cutHighlight);
   }
 }
