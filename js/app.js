@@ -36,10 +36,6 @@ function initThreeJS() {
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.shadowMap.enabled = true;
-  
-  // KUNCI UTAMA: Aktifkan pemotongan fisik piksel 3D (Local Clipping)
-  renderer.localClippingEnabled = true;
-
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -400,13 +396,21 @@ function onViewportClick(event) {
   raycaster.setFromCamera(mouse, camera);
 
   const targetMeshes = [];
-  bendaKerjaList.forEach(b => { if (b.mainMesh) targetMeshes.push(b.mainMesh); });
+  bendaKerjaList.forEach(b => { 
+    if (b.voxelsGroup) {
+      b.voxelsGroup.children.forEach(v => targetMeshes.push(v));
+    }
+  });
 
   const intersects = raycaster.intersectObjects(targetMeshes);
 
   if (intersects.length > 0) {
     const hit = intersects[0];
-    const parentGroup = hit.object.parent;
+    let parentGroup = hit.object.parent;
+    while(parentGroup && !parentGroup.isBendaGroup) {
+      parentGroup = parentGroup.parent;
+    }
+
     const foundIndex = bendaKerjaList.findIndex(b => b.group === parentGroup);
 
     if (foundIndex !== -1) {
@@ -435,7 +439,7 @@ function eksekusiPemotongan() {
   }
 
   const targetObj = bendaKerjaList[selectedObjIndex];
-  if (!targetObj.mainMesh || !toolGroup) return;
+  if (!targetObj.voxelsGroup || !toolGroup) return;
 
   isCuttingAnimation = true;
   transformControl.detach();
@@ -477,7 +481,7 @@ function eksekusiPemotongan() {
       toolGroup.position.copy(startPos);
       toolGroup.quaternion.copy(startRot);
 
-      prosesCutterVisualResult(targetObj);
+      prosesPemotonganVoxelFisik(targetObj);
       isCuttingAnimation = false;
       refreshGizmoTarget();
     }
@@ -486,88 +490,53 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMOTONGAN FISIK ASLI MENGGUNAKAN LOCAL CLIPPING PLANES --- */
-function prosesCutterVisualResult(targetObj) {
+/* --- PEMOTONGAN VOXEL FISIK (PASTI BERLUBANG 100% NYATA) --- */
+function prosesPemotonganVoxelFisik(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  // 1. Deteksi tebal bahan kayu
-  let maxThickness = 30;
-  if (targetObj.jenis === 'balok') {
-    const localNormal = currentHitNormal.clone().transformDirection(targetObj.group.matrixWorld.clone().invert()).abs();
-    if (localNormal.y > 0.5) maxThickness = targetObj.t;
-    else if (localNormal.x > 0.5) maxThickness = targetObj.p;
-    else maxThickness = targetObj.l;
-  } else {
-    maxThickness = targetObj.t;
-  }
+  const toolPosLocal = targetObj.group.worldToLocal(toolGroup.position.clone());
 
-  // 2. Kunci kedalaman maksimal agar tidak menonjol
-  const effectiveDepth = Math.min(valDepthInput, maxThickness);
+  // Buat bounding box alat dalam koordinat lokal
+  let radius = valDiameter / 2;
+  if (activeAlat === 'pahat') radius = valDiameter; // ukuran persegi
+  
+  const toRemove = [];
 
-  // 3. BUAT BIDANG CLIPPER (CLIPPING PLANE) DI LOKASI ALAT
-  // Bidang ini secara fisik "memotong/menghilangkan" piksel kayu
-  const cutDirection = new THREE.Vector3(0, -1, 0).applyQuaternion(toolGroup.quaternion);
-  const cutPlane = new THREE.Plane();
-  cutPlane.setFromNormalAndCoplanarPoint(cutDirection, toolGroup.position);
+  targetObj.voxelsGroup.children.forEach(voxel => {
+    const vPos = voxel.position;
+    
+    // Proyeksi jarak voxel terhadap posisi ujung alat
+    const dx = vPos.x - toolPosLocal.x;
+    const dy = vPos.y - toolPosLocal.y;
+    const dz = vPos.z - toolPosLocal.z;
 
-  // Terapkan bidang potong langsung ke Material Utama Kayu
-  if (!targetObj.mainMesh.material.clippingPlanes) {
-    targetObj.mainMesh.material.clippingPlanes = [];
-  }
-  targetObj.mainMesh.material.clippingPlanes.push(cutPlane);
-  targetObj.mainMesh.material.clipShadows = true;
-  targetObj.mainMesh.material.needsUpdate = true;
+    // Hitung jarak radial dan kedalaman
+    const distHorizontal = Math.sqrt(dx * dx + dz * dz);
 
-  // 4. BUAT MESH RONGGA DALAM KAYU (TUTUP PEMOTONGAN / DINDING LUBANG)
-  const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
-  let holeGeo;
-
-  if (activeAlat === 'bor') {
-    const radius = valDiameter / 2;
-    holeGeo = new THREE.CylinderGeometry(radius, radius, effectiveDepth, 32);
-    holeGeo.translate(0, -effectiveDepth / 2, 0);
-
-  } else if (activeAlat === 'pahat') {
-    const sideSize = valDiameter * 2;
-    holeGeo = new THREE.BoxGeometry(sideSize, effectiveDepth, sideSize);
-    holeGeo.translate(0, -effectiveDepth / 2, 0);
-
-  } else { // gergaji
-    let targetSpan = 12;
-    if (targetObj.jenis === 'balok') {
-      targetSpan = targetObj.l * 1.02;
-    } else {
-      targetSpan = targetObj.t * 1.02;
+    if (activeAlat === 'bor') {
+      if (distHorizontal <= radius && dy <= 0.2 && dy >= -valDepthInput) {
+        toRemove.push(voxel);
+      }
+    } else if (activeAlat === 'pahat') {
+      if (Math.abs(dx) <= radius && Math.abs(dz) <= radius && dy <= 0.2 && dy >= -valDepthInput) {
+        toRemove.push(voxel);
+      }
+    } else { // Gergaji
+      if (Math.abs(dx) <= 0.8 && Math.abs(dz) <= targetObj.l && dy <= 0.2 && dy >= -valDepthInput) {
+        toRemove.push(voxel);
+      }
     }
-
-    holeGeo = new THREE.BoxGeometry(0.5, effectiveDepth, targetSpan);
-    holeGeo.translate(0, -effectiveDepth / 2, 0);
-  }
-
-  // Material Serat Dalam Kayu Cokelat Tua
-  const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x1f0f02,
-    roughness: 0.9,
-    metalness: 0.0,
-    side: THREE.BackSide // Menggambarkan bagian dalam rongga potong
   });
 
-  const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
-  cutMesh.position.copy(localHitPos);
-  
-  cutMesh.quaternion.copy(toolGroup.quaternion);
-  cutMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
+  // Hapus voxel yang terkena pemotongan
+  toRemove.forEach(v => {
+    targetObj.voxelsGroup.remove(v);
+    v.geometry.dispose();
+    v.material.dispose();
+  });
 
-  targetObj.group.add(cutMesh);
   targetObj.hasBeenCut = true;
-
-  // Penegas Garis Tepi Lubang (Warna Oranye)
-  const cutEdges = new THREE.EdgesGeometry(holeGeo);
-  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff7700, linewidth: 2 });
-  const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
-  cutMesh.add(cutLineSegments);
-
   rebuildOverlays(targetObj);
 }
 
@@ -581,21 +550,8 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  const striminMat = new THREE.MeshBasicMaterial({
-    color: 0x4a82e8,
-    wireframe: true,
-    transparent: true,
-    opacity: 0.35
-  });
-  const striminMesh = new THREE.Mesh(item.mainMesh.geometry, striminMat);
-  striminMesh.isStrimin = true;
-  item.group.add(striminMesh);
-
-  const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
-  const edgeLine = new THREE.LineSegments(edgesGeometry, lineMat);
-  edgeLine.isStrimin = true;
-  item.group.add(edgeLine);
+  const objectAxes = new THREE.AxesHelper(Math.max(item.t * 0.3, 6));
+  item.group.add(objectAxes);
 }
 
 /* --- MANAJEMEN BENDA KERJA --- */
@@ -618,10 +574,11 @@ function tambahBendaKerja() {
     t: isBalok ? 30 : 6,
     opacity: 1.0,
     group: new THREE.Group(),
-    mainMesh: null,
+    voxelsGroup: null,
     hasBeenCut: false
   };
 
+  objData.group.isBendaGroup = true;
   const offsetX = (bendaKerjaList.length) * 12;
   objData.group.position.set(offsetX, 0, 0);
 
@@ -676,7 +633,7 @@ function pilihBendaKerja(index) {
     syncRotationToUI();
     controlsDiv.style.display = 'block';
 
-    if (!item.mainMesh) updateObjekMesh(item);
+    if (!item.voxelsGroup) updateObjekMesh(item);
     refreshGizmoTarget();
   } else {
     controlsDiv.style.display = 'none';
@@ -725,45 +682,58 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
+/* --- MEMBUAT KAYU BERBASIS VOXEL 3D FISIK --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
     group.remove(group.children[0]); 
   }
 
-  let geometry;
-  const isTransparent = item.opacity < 1.0;
+  item.voxelsGroup = new THREE.Group();
+  group.add(item.voxelsGroup);
 
-  const material = new THREE.MeshStandardMaterial({
+  const voxelSize = 0.8;
+  const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+  const woodMat = new THREE.MeshStandardMaterial({
     color: 0xc28e0e,
     roughness: 0.6,
     metalness: 0.1,
-    transparent: isTransparent,
+    transparent: item.opacity < 1.0,
     opacity: item.opacity
   });
 
-  let height = item.t;
-
   if (item.jenis === 'balok') {
-    height = item.t;
-    geometry = new THREE.BoxGeometry(item.p, item.t, item.l, item.p, item.t, item.l);
-  } else {
-    height = item.p;
+    const halfP = item.p / 2;
+    const halfT = item.t / 2;
+    const halfL = item.l / 2;
+
+    for (let x = -halfP; x < halfP; x += voxelSize) {
+      for (let y = -halfT; y < halfT; y += voxelSize) {
+        for (let z = -halfL; z < halfL; z += voxelSize) {
+          const vMesh = new THREE.Mesh(boxGeo, woodMat);
+          vMesh.position.set(x + voxelSize/2, y + voxelSize/2 + item.t/2, z + voxelSize/2);
+          item.voxelsGroup.add(vMesh);
+        }
+      }
+    }
+  } else { // Silinder
     const radius = item.t / 2;
-    geometry = new THREE.CylinderGeometry(radius, radius, item.p, 24, item.p);
+    const halfP = item.p / 2;
+
+    for (let x = -radius; x < radius; x += voxelSize) {
+      for (let z = -radius; z < radius; z += voxelSize) {
+        if (Math.sqrt(x*x + z*z) <= radius) {
+          for (let y = 0; y < item.p; y += voxelSize) {
+            const vMesh = new THREE.Mesh(boxGeo, woodMat);
+            vMesh.position.set(x + voxelSize/2, y + voxelSize/2, z + voxelSize/2);
+            item.voxelsGroup.add(vMesh);
+          }
+        }
+      }
+    }
   }
 
-  item.mainMesh = new THREE.Mesh(geometry, material);
-  item.mainMesh.castShadow = true;
-  item.mainMesh.receiveShadow = true;
-  group.add(item.mainMesh);
-
   rebuildOverlays(item);
-
-  const objectAxes = new THREE.AxesHelper(Math.max(height * 0.3, 6));
-  group.add(objectAxes);
-
-  group.position.y = height / 2;
 }
 
 function setFase(fase) {
