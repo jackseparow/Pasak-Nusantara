@@ -155,6 +155,21 @@
       font-size: 0.78rem;
     }
 
+    .btn-clear {
+      width: 100%;
+      padding: 8px;
+      background: #d9534f;
+      border: none;
+      color: #fff;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 6px;
+      font-size: 0.78rem;
+      transition: background 0.2s;
+    }
+    .btn-clear:hover { background: #c9302c; }
+
     #viewport { flex: 1; position: relative; background-color: #0d0d12; }
 
     .phase-bar {
@@ -185,7 +200,6 @@
 
     .btn-phase.active { background: #2a5298; color: #fff; }
 
-    /* Control Mode Gizmo (Bawah) */
     .transform-toggle-box {
       position: absolute;
       bottom: 16px;
@@ -313,6 +327,7 @@
         </div>
 
         <button class="btn-add" onclick="tambahBendaKerja()">+ Tambah Benda Kerja</button>
+        <button class="btn-clear" onclick="bersihkanAreaKerja()">🧹 Bersihkan Area Kerja</button>
 
         <div class="object-list" id="objectList"></div>
 
@@ -368,7 +383,7 @@
       </div>
 
       <div class="hint-box" id="hintBoxText">
-        💡 Pilih alat kerja di atas, lalu **klik langsung** pada titik/garis permukaan kayu di area 3D untuk menempatkan alat pemotong.
+        💡 Klik langsung pada permukaan kayu untuk menempatkan alat, lalu tekan <strong>Eksekusi Pemotongan</strong>.
       </div>
 
     </div>
@@ -382,7 +397,6 @@
 
       <div class="rotation-tooltip" id="rotationTooltip">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
 
-      <!-- Saklar Tombol Panduan (Geser / Rotasi / Nonaktifkan) -->
       <div class="transform-toggle-box">
         <button class="btn-toggle-gizmo active" id="btnToggleTranslate" onclick="setGizmoActiveMode('translate')">↔️ Panduan Geser</button>
         <button class="btn-toggle-gizmo" id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">🔄 Panduan Rotasi</button>
@@ -397,7 +411,6 @@
         </div>
 
         <div class="param-group">
-          <!-- Parameter Diameter (Untuk Bor & Pahat) -->
           <div class="param-row" id="rowToolDiameter" style="display: none;">
             <label id="lblToolDiameter">Diameter (d):</label>
             <input type="number" id="toolDiameter" value="1" min="0.5" max="10" step="0.5" oninput="updateAlatTransform()">
