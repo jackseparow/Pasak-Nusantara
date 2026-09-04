@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geoblock - Pasak Nusantara 3D</title>
   
+  <!-- Three.js, OrbitControls, & DragControls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/DragControls.js"></script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -152,7 +154,6 @@
       font-size: 0.78rem;
     }
 
-    /* Viewport Area & Floating Tool Controls */
     #viewport { flex: 1; position: relative; background-color: #0d0d12; }
 
     .phase-bar {
@@ -183,7 +184,6 @@
 
     .btn-phase.active { background: #2a5298; color: #fff; }
 
-    /* Panel Floating Alat di Dalam Viewport */
     .tool-overlay-panel {
       position: absolute;
       top: 16px;
@@ -250,7 +250,7 @@
   <div class="main-container">
     <div id="stock-panel">
       
-      <!-- Panel Benda Kerja (Multi-Object) -->
+      <!-- Panel Benda Kerja -->
       <div class="stock-section">
         <div class="stock-title">📦 Benda Kerja (Multi-Kayu)</div>
         
@@ -309,21 +309,19 @@
       </div>
 
       <div class="hint-box">
-        🎯 <strong>Arahkan & Klik Strimin:</strong> Sorot kursor ke permukaan kayu untuk menempelkan alat pada grid unit, lalu klik untuk mengunci koordinat.
+        ✋ <strong>Geser / Drag Objek:</strong> Klik & tahan kayu untuk memindahkannya. Terutama sangat berguna pada <em>Fase 2 (Pasang/Rakit)</em>.
       </div>
 
     </div>
 
     <div id="viewport">
-      <!-- Fase Top Bar -->
       <div class="phase-bar">
         <button id="fasePahat" class="btn-phase active" onclick="setFase('pahat')">1. Pahat & Ukur</button>
         <button id="faseRakit" class="btn-phase" onclick="setFase('rakit')">2. Pasang / Rakit</button>
         <button id="faseUji" class="btn-phase" onclick="setFase('uji')">3. Uji Gempa</button>
       </div>
 
-      <!-- Panel Floating Parameter Alat -->
-      <div class="tool-overlay-panel">
+      <div class="tool-overlay-panel" id="toolOverlayPanel">
         <div class="tool-overlay-title">
           <span id="toolOverlayIcon">🪚</span>
           <span id="toolOverlayName">Kontrol Gergaji</span>
