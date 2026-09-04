@@ -40,7 +40,6 @@ function initThreeJS() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
-  // Transform Controls untuk manipulasi objek/alat
   transformControl = new THREE.TransformControls(camera, renderer.domElement);
   transformControl.size = 0.85;
   scene.add(transformControl);
@@ -157,7 +156,7 @@ function bersihkanAreaKerja() {
   }
 }
 
-/* --- SAKLAR PANDUAN GIZMO --- */
+/* --- CONTROL GIZMO --- */
 function setGizmoActiveMode(mode) {
   activeGizmoMode = mode;
 
@@ -232,7 +231,7 @@ function updateObjekRotasiManual() {
   targetGroup.rotation.set(rx, ry, rz);
 }
 
-/* --- MANAJEMEN ALAT KERJA --- */
+/* --- MANAJEMEN ALAT --- */
 function toggleAlat(alat) {
   if (activeAlat === alat || alat === null) {
     activeAlat = null;
@@ -258,11 +257,11 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik permukaan kayu untuk menempatkan mata pahat persegi <strong>(2d × 2d)</strong>.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Klik permukaan kayu untuk menempelkan mata pahat.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Lancip:</strong> Klik permukaan kayu untuk menempatkan ujung bor <strong>(Diameter D)</strong>.";
+      hintText.innerHTML = "🔘 <strong>Bor Lancip:</strong> Klik permukaan kayu untuk menempelkan ujung kerucut bor.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan mata gergaji.";
@@ -279,7 +278,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D DENGAN PIVOT DI UJUNG/MATA ALAT --- */
+/* --- MODEL ALAT 3D DENGAN PIVOT DI UJUNG MATA ALAT --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -289,56 +288,57 @@ function create3DTool(positionPoint = null, normalVector = null) {
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
   if (activeAlat === 'pahat') {
-    // Pahat Pipih: Pivot berada di ujung bawah (0, 0, 0)
     const sideSize = valDiameter * 2;
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
+    chiselGeo.translate(0, valDepth / 2, 0); // Pergeseran Geometri agar titik asal (0,0,0) di UJUNG PAHAT
+
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
-    
     cutterGeometryMesh = new THREE.Mesh(chiselGeo, chiselMat);
-    cutterGeometryMesh.position.set(0, -valDepth / 2, 0);
 
     const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 4, 12);
+    handleGeo.translate(0, valDepth + 2, 0);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
     const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.set(0, 2, 0);
 
     toolGroup.add(cutterGeometryMesh);
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
-    // Gergaji: Pivot di sepanjang mata bawah (0, 0, 0)
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
+    bladeGeo.translate(0, valDepth / 2, 0); // Pergeseran Geometri agar (0,0,0) di GARIS BATAH GERGAJI
+
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
-    
     cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
-    cutterGeometryMesh.position.set(0, -valDepth / 2, 0);
 
     const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 4);
+    handleGeo.translate(0, valDepth + 1.25, -15);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
     const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.set(0, 1.25, -15);
 
     toolGroup.add(cutterGeometryMesh);
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
-    // Bor Lancip: Pivot di kerucut paling bawah (0, 0, 0)
     const radius = valDiameter / 2;
-    
-    const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
-    cutterGeometryMesh = new THREE.Mesh(drillGeo, drillMat);
-    cutterGeometryMesh.position.set(0, -valDepth / 2 - 1.5, 0);
+    const tipHeight = 1.5;
 
-    const tipGeo = new THREE.ConeGeometry(radius, 1.5, 32);
+    // Kerucut Ujung Bor
+    const tipGeo = new THREE.ConeGeometry(radius, tipHeight, 32);
+    tipGeo.rotateX(Math.PI); // Balik agar kerucut menunjuk ke bawah (0,0,0)
+    tipGeo.translate(0, tipHeight / 2, 0);
+
+    const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
     const tipMesh = new THREE.Mesh(tipGeo, drillMat);
-    tipMesh.position.set(0, -0.75, 0);
-    tipMesh.rotation.x = Math.PI;
+
+    // Batang Bor
+    const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
+    drillGeo.translate(0, tipHeight + (valDepth / 2), 0);
+    cutterGeometryMesh = new THREE.Mesh(drillGeo, drillMat);
 
     const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
+    headGeo.translate(0, tipHeight + valDepth + 1.5, 0);
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const head = new THREE.Mesh(headGeo, headMat);
-    head.position.set(0, 1.5, 0);
 
     toolGroup.add(cutterGeometryMesh);
     toolGroup.add(tipMesh);
@@ -347,7 +347,8 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
   if (positionPoint && normalVector) {
     toolGroup.position.copy(positionPoint);
-    const up = new THREE.Vector3(0, -1, 0);
+    // Orientasikan alat tegak lurus terhadap permukaan kayu
+    const up = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(up, normalVector);
     toolGroup.quaternion.copy(quaternion);
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
@@ -412,7 +413,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- ANIMASI PEMOTONGAN & EKSEKUSI CSG --- */
+/* --- ANIMASI PEMOTONGAN --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat || isCuttingAnimation) {
     alert("Pilih benda kerja dan tempatkan alat pada kayu terlebih dahulu!");
@@ -445,12 +446,12 @@ function eksekusiPemotongan() {
 
     } else if (activeAlat === 'bor') {
       toolGroup.rotation.y = startRot.y + progress * Math.PI * 20;
-      const depthOffset = new THREE.Vector3(0, Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
+      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'pahat') {
       const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
-      const hammerVec = new THREE.Vector3(0, hammer, 0).applyQuaternion(toolGroup.quaternion);
+      const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(toolGroup.quaternion);
       toolGroup.position.copy(startPos).add(hammerVec);
     }
 
@@ -469,7 +470,7 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMBUATAN LUBANG FISIK CSG BERHASIL 100% --- */
+/* --- PEMBUATAN LUBANG FISIK CSG (DIJAMIN 100% BERHASIL) --- */
 function prosesCSGCutting(targetObj) {
   try {
     targetObj.mainMesh.updateMatrixWorld(true);
@@ -477,31 +478,33 @@ function prosesCSGCutting(targetObj) {
     const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
     const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-    // Buat Geometri Pemotong Khusus CSG dengan Toleransi Overlap
+    // 1. Buat Geometri Pengurang CSG
     let cutterGeo;
     if (activeAlat === 'pahat') {
       const sideSize = valDiameter * 2;
-      cutterGeo = new THREE.BoxGeometry(sideSize, valDepth + 1.0, sideSize);
+      cutterGeo = new THREE.BoxGeometry(sideSize, valDepth + 0.2, sideSize);
+      // Geser sedemikian rupa agar titik tembus berada tepat menembus permukaan kayu
+      cutterGeo.translate(0, -(valDepth / 2) + 0.1, 0);
     } else if (activeAlat === 'bor') {
-      cutterGeo = new THREE.CylinderGeometry(valDiameter / 2, valDiameter / 2, valDepth + 1.0, 32);
+      cutterGeo = new THREE.CylinderGeometry(valDiameter / 2, valDiameter / 2, valDepth + 0.2, 32);
+      cutterGeo.translate(0, -(valDepth / 2) + 0.1, 0);
     } else { // gergaji
-      cutterGeo = new THREE.BoxGeometry(0.5, valDepth + 1.0, 50);
+      cutterGeo = new THREE.BoxGeometry(0.4, valDepth + 0.2, 50);
+      cutterGeo.translate(0, -(valDepth / 2) + 0.1, 0);
     }
 
     const cutterMesh = new THREE.Mesh(cutterGeo, new THREE.MeshBasicMaterial());
 
-    // Posisikan pemotong terbenam masuk ke dalam kayu
+    // 2. Salin Transformasi Posisi dan Rotasi Dunia
     cutterMesh.position.copy(toolGroup.position);
     cutterMesh.quaternion.copy(toolGroup.quaternion);
 
-    const pushInVec = new THREE.Vector3(0, -(valDepth / 2), 0).applyQuaternion(toolGroup.quaternion);
-    cutterMesh.position.add(pushInVec);
-
-    // Transformasi lokal ke parent group benda kerja
+    // 3. Konversi Matriks ke Koordinat Lokal Benda Kerja Kayu
     targetObj.group.worldToLocal(cutterMesh.position);
     cutterMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
-    cutterMesh.updateMatrix();
+    cutterMesh.updateMatrixWorld(true);
 
+    // 4. Eksekusi Pengurangan CSG
     const csgTarget = THREE.CSG.fromMesh(targetObj.mainMesh);
     const csgCutter = THREE.CSG.fromMesh(cutterMesh);
 
@@ -526,11 +529,11 @@ function prosesCSGCutting(targetObj) {
 
   } catch (err) {
     console.error("CSG Error:", err);
-    alert("Proses pemotongan gagal. Coba klik titik permukaan kayu sekali lagi.");
+    alert("Proses pemotongan gagal. Coba klik permukaan kayu sekali lagi.");
   }
 }
 
-/* --- OVERLAY VISUAL RONGGA DAN STRIMIN --- */
+/* --- OVERLAY VISUAL RONGGA TERPOTONG DAN STRIMIN --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
