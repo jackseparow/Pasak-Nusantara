@@ -185,6 +185,34 @@
 
     .btn-phase.active { background: #2a5298; color: #fff; }
 
+    /* Control Mode Gizmo (Bawah) */
+    .transform-toggle-box {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      background: rgba(25, 25, 35, 0.9);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #4a82e8;
+      z-index: 5;
+    }
+
+    .btn-toggle-gizmo {
+      background: #1a1a24;
+      border: 1px solid #3b3b52;
+      color: #aaa;
+      padding: 6px 12px;
+      font-size: 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .btn-toggle-gizmo.active { background: #2a5298; color: #fff; border-color: #4a82e8; }
+
     .rotation-tooltip {
       position: absolute;
       top: 60px;
@@ -206,7 +234,7 @@
       position: absolute;
       top: 16px;
       right: 16px;
-      width: 220px;
+      width: 230px;
       background: rgba(25, 25, 35, 0.9);
       border: 1px solid #4a82e8;
       border-radius: 8px;
@@ -292,14 +320,12 @@
         <div id="selectedObjectControls" style="margin-top: 12px; border-top: 1px solid #333346; padding-top: 8px; display: none;">
           <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-bottom: 6px;">Dimensi Benda Kerja</div>
           
-          <!-- Kontrol Dimensi Balok -->
           <div class="param-group" id="groupBalokDim">
             <div class="param-row"><label>Panjang (X):</label><input type="number" id="objP" value="10" min="1" oninput="updateObjekTerpilih()"></div>
             <div class="param-row"><label>Lebar (Z):</label><input type="number" id="objL" value="10" min="1" oninput="updateObjekTerpilih()"></div>
             <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="objT" value="30" min="1" oninput="updateObjekTerpilih()"></div>
           </div>
 
-          <!-- Kontrol Dimensi Silinder (Diameter & Tinggi) -->
           <div class="param-group" id="groupSilinderDim" style="display: none;">
             <div class="param-row"><label>Diameter (D):</label><input type="number" id="objDiameter" value="6" min="1" oninput="updateObjekTerpilih()"></div>
             <div class="param-row"><label>Tinggi (H):</label><input type="number" id="objTinggiSilinder" value="25" min="1" oninput="updateObjekTerpilih()"></div>
@@ -341,9 +367,8 @@
         </div>
       </div>
 
-      <div class="hint-box">
-        🥢 <strong>Geometri Silinder:</strong>
-        Variabel pasak silinder menggunakan besaran <strong>Diameter (D)</strong> dan <strong>Tinggi (H)</strong>.
+      <div class="hint-box" id="hintBoxText">
+        💡 Pilih alat kerja di atas, lalu **klik langsung** pada titik/garis permukaan kayu di area 3D untuk menempatkan alat pemotong.
       </div>
 
     </div>
@@ -357,21 +382,30 @@
 
       <div class="rotation-tooltip" id="rotationTooltip">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
 
+      <!-- Saklar Tombol Panduan (Geser / Rotasi / Nonaktifkan) -->
+      <div class="transform-toggle-box">
+        <button class="btn-toggle-gizmo active" id="btnToggleTranslate" onclick="setGizmoActiveMode('translate')">↔️ Panduan Geser</button>
+        <button class="btn-toggle-gizmo" id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">🔄 Panduan Rotasi</button>
+        <button class="btn-toggle-gizmo" id="btnToggleOff" onclick="setGizmoActiveMode('off')">🚫 Lepas Panduan</button>
+      </div>
+
+      <!-- Panel Control Pemotongan Tool -->
       <div class="tool-overlay-panel" id="toolOverlayPanel">
         <div class="tool-overlay-title">
           <span id="toolOverlayIcon">🪚</span>
-          <span id="toolOverlayName">Kontrol Gergaji</span>
+          <span id="toolOverlayName">Kontrol Alat</span>
         </div>
 
         <div class="param-group">
-          <div class="param-row" id="rowDrillDiameter" style="display: none;">
-            <label>Diameter Bor (D):</label>
-            <input type="number" id="toolDrillDiameter" value="2" min="0.5" max="10" step="0.5" oninput="updateAlatTransform()">
+          <!-- Parameter Diameter (Untuk Bor & Pahat) -->
+          <div class="param-row" id="rowToolDiameter" style="display: none;">
+            <label id="lblToolDiameter">Diameter (d):</label>
+            <input type="number" id="toolDiameter" value="1" min="0.5" max="10" step="0.5" oninput="updateAlatTransform()">
           </div>
 
           <div class="param-row">
             <label>Kedalaman:</label>
-            <input type="number" id="toolDepth" value="6" min="1" max="30" oninput="updateAlatTransform()">
+            <input type="number" id="toolDepth" value="4" min="1" max="30" oninput="updateAlatTransform()">
           </div>
         </div>
 
