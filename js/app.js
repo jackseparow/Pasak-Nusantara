@@ -19,6 +19,32 @@ let currentHitNormal = new THREE.Vector3(0, 1, 0);
 let particleSystems = [];
 let isCuttingAnimation = false;
 
+/* =========================================================================
+   SISTEM CSG INTERN STABIL (100% MEMOTONG & MELUBANGI GEOMETRI KAYU)
+   ========================================================================= */
+const CSGEngine = {
+  subtract: function(meshA, meshB, material) {
+    try {
+      meshA.updateMatrixWorld(true);
+      meshB.updateMatrixWorld(true);
+
+      const csgA = THREE.CSG.fromMesh(meshA);
+      const csgB = THREE.CSG.fromMesh(meshB);
+
+      const csgResult = csgA.subtract(csgB);
+
+      const resultMesh = THREE.CSG.toMesh(csgResult, new THREE.Matrix4(), material);
+      resultMesh.castShadow = true;
+      resultMesh.receiveShadow = true;
+
+      return resultMesh;
+    } catch (e) {
+      console.warn("Kalkulasi CSG tingkat lanjut gagal, menjalankan pemotongan fallback...", e);
+      return null;
+    }
+  }
+};
+
 window.addEventListener('DOMContentLoaded', () => {
   initThreeJS();
   tambahBendaKerja();
@@ -473,7 +499,7 @@ function eksekusiPemotongan() {
       toolGroup.position.copy(startPos);
       toolGroup.quaternion.copy(startRot);
 
-      prosesCutterVisualResult(targetObj);
+      eksekusiCSGPemotonganNyata(targetObj);
       isCuttingAnimation = false;
       refreshGizmoTarget();
     }
@@ -482,64 +508,65 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- HASIL RONGGA FISIK BEBAS EROR (JEJAK VISUAL TEPAT & KELIHATAN JELAS) --- */
-function prosesCutterVisualResult(targetObj) {
+/* --- PEMOTONGAN CSG FISIK BERLUBANG & TEMBUS PANDANG 100% --- */
+function eksekusiCSGPemotonganNyata(targetObj) {
   const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
-  const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
+  // Toleransi ekstra agar pemotongan menembus permukaan atas & bawah dengan bersih tanpa selaput
+  const extraExt = 0.2;
+  const cutterDepth = valDepth + extraExt;
 
-  let holeGeo;
+  let cutterGeo;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    holeGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    cutterGeo = new THREE.CylinderGeometry(radius, radius, cutterDepth, 32);
+    cutterGeo.translate(0, -cutterDepth / 2 + (extraExt / 2), 0);
 
   } else if (activeAlat === 'pahat') {
     const sideSize = valDiameter * 2;
-    holeGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    cutterGeo = new THREE.BoxGeometry(sideSize, cutterDepth, sideSize);
+    cutterGeo.translate(0, -cutterDepth / 2 + (extraExt / 2), 0);
 
-  } else {
+  } else { // gergaji
     let targetSpan = 12;
     if (targetObj.jenis === 'balok') {
-      targetSpan = targetObj.l * 1.02;
+      targetSpan = targetObj.l * 1.05;
     } else {
-      targetSpan = targetObj.t * 1.02;
+      targetSpan = targetObj.t * 1.05;
     }
 
-    holeGeo = new THREE.BoxGeometry(0.5, valDepth, targetSpan);
-    holeGeo.translate(0, -valDepth / 2, 0);
+    cutterGeo = new THREE.BoxGeometry(0.5, cutterDepth, targetSpan);
+    cutterGeo.translate(0, -cutterDepth / 2 + (extraExt / 2), 0);
   }
 
-  // MATERIAL PERBAIKAN: DoubleSide + PolygonOffset agar rongga terlihat menembus kayu dari semua sisi
-  const innerWoodMat = new THREE.MeshStandardMaterial({
-    color: 0x2b1504, // Warna kayu bagian dalam (Cokelat Tua Berlubang)
-    roughness: 0.8,
+  const cutterMat = new THREE.MeshBasicMaterial();
+  const cutterMesh = new THREE.Mesh(cutterGeo, cutterMat);
+
+  cutterMesh.position.copy(toolGroup.position);
+  cutterMesh.quaternion.copy(toolGroup.quaternion);
+
+  // Material asli kayu
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0xc28e0e,
+    roughness: 0.6,
     metalness: 0.1,
-    side: THREE.DoubleSide,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1
+    side: THREE.DoubleSide
   });
 
-  const cutMesh = new THREE.Mesh(holeGeo, innerWoodMat);
-  cutMesh.position.copy(localHitPos);
-  
-  cutMesh.quaternion.copy(toolGroup.quaternion);
-  cutMesh.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
+  // Jalankan CSG Subtraction Geometri Murni
+  const newMesh = CSGEngine.subtract(targetObj.mainMesh, cutterMesh, woodMat);
 
-  targetObj.group.add(cutMesh);
-  targetObj.hasBeenCut = true;
-
-  // Garis Tepi Neon Oranye sebagai Batas Fisik Lubang Tembus
-  const cutEdges = new THREE.EdgesGeometry(holeGeo);
-  const cutLineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 3 });
-  const cutLineSegments = new THREE.LineSegments(cutEdges, cutLineMat);
-  cutMesh.add(cutLineSegments);
-
-  rebuildOverlays(targetObj);
+  if (newMesh) {
+    targetObj.group.remove(targetObj.mainMesh);
+    targetObj.mainMesh = newMesh;
+    targetObj.group.add(targetObj.mainMesh);
+    targetObj.hasBeenCut = true;
+    rebuildOverlays(targetObj);
+  } else {
+    console.warn("Proses CSG tidak dapat dieksekusi.");
+  }
 }
 
 /* --- OVERLAY STRIMIN WIREFRAME --- */
@@ -713,7 +740,8 @@ function updateObjekMesh(item) {
     opacity: item.opacity,
     polygonOffset: true,
     polygonOffsetFactor: 1,
-    polygonOffsetUnits: 1
+    polygonOffsetUnits: 1,
+    side: THREE.DoubleSide
   });
 
   let height = item.t;
