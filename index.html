@@ -185,7 +185,6 @@
 
     .btn-phase.active { background: #2a5298; color: #fff; }
 
-    /* Switch Indicator Mode (Geser / Putar) */
     .transform-toggle-box {
       position: absolute;
       bottom: 16px;
@@ -212,6 +211,24 @@
     }
 
     .btn-toggle-gizmo.active { background: #2a5298; color: #fff; border-color: #4a82e8; }
+
+    /* Floating Tooltip Angka Rotasi Real-time */
+    .rotation-tooltip {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(42, 82, 152, 0.9);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      border: 1px solid #61afef;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      display: none;
+      z-index: 10;
+    }
 
     .tool-overlay-panel {
       position: absolute;
@@ -309,7 +326,7 @@
             <div class="param-row"><label>Tinggi (Y):</label><input type="number" id="objT" value="30" min="1" oninput="updateObjekTerpilih()"></div>
           </div>
 
-          <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-top: 10px; margin-bottom: 6px;">Sudut Rotasi Kayu (°)</div>
+          <div style="font-size: 0.75rem; font-weight: bold; color: #4a82e8; margin-top: 10px; margin-bottom: 6px;">Ketuk / Ketik Sudut Rotasi (°)</div>
           <div class="param-group">
             <div class="param-row"><label>Rotasi X (°):</label><input type="number" id="objRotX" value="0" step="1" oninput="updateObjekRotasiManual()"></div>
             <div class="param-row"><label>Rotasi Y (°):</label><input type="number" id="objRotY" value="0" step="1" oninput="updateObjekRotasiManual()"></div>
@@ -346,8 +363,8 @@
       </div>
 
       <div class="hint-box">
-        💡 <strong>Fitur Pemotongan Terpisah:</strong>
-        Jika eksekusi membelah kayu menjadi 2 bagian, kayu akan otomatis menjadi 2 benda kerja terpisah di panel kiri yang bisa di-select dan hapus secara independen.
+        📐 <strong>Informasi Rotasi:</strong>
+        Ketik derajat rotasi secara langsung pada kotak input di atas atau gunakan ring rotasi di area 3D.
       </div>
 
     </div>
@@ -359,7 +376,9 @@
         <button id="faseUji" class="btn-phase" onclick="setFase('uji')">3. Uji Gempa</button>
       </div>
 
-      <!-- Tombol Saklar Toggle Panduan Sumbu Geser / Rotasi -->
+      <!-- Floating Tooltip Rotasi -->
+      <div class="rotation-tooltip" id="rotationTooltip">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
+
       <div class="transform-toggle-box">
         <button class="btn-toggle-gizmo active" id="btnToggleTranslate" onclick="setGizmoActiveMode('translate')">↔️ Panduan Geser</button>
         <button class="btn-toggle-gizmo" id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">🔄 Panduan Rotasi</button>
