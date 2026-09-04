@@ -13,6 +13,9 @@ let cutterGeometryMesh = null;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 
+// Sistem Partikel Percikan Kayu
+let particleSystems = [];
+
 window.addEventListener('DOMContentLoaded', () => {
   initThreeJS();
   tambahBendaKerja();
@@ -70,6 +73,72 @@ function initThreeJS() {
   window.addEventListener('resize', onWindowResize);
 
   animate();
+}
+
+/* --- ANIMASI PERCIKAN TAHI KAYU (WOOD SHAVINGS) --- */
+function triggerWoodSparks(position) {
+  const particleCount = 45;
+  const geometry = new THREE.BufferGeometry();
+  const positions = [];
+  const velocities = [];
+
+  for (let i = 0; i < particleCount; i++) {
+    positions.push(position.x, position.y, position.z);
+    
+    // Kecepatan acak menyebar ke segala arah
+    const vx = (Math.random() - 0.5) * 12;
+    const vy = Math.random() * 10 + 2;
+    const vz = (Math.random() - 0.5) * 12;
+    velocities.push(vx, vy, vz);
+  }
+
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+  const material = new THREE.PointsMaterial({
+    color: 0xdd9933,
+    size: 0.6,
+    transparent: true,
+    opacity: 1.0
+  });
+
+  const particles = new THREE.Points(geometry, material);
+  scene.add(particles);
+
+  particleSystems.push({
+    mesh: particles,
+    velocities: velocities,
+    life: 1.0
+  });
+}
+
+function updateParticles() {
+  for (let i = particleSystems.length - 1; i >= 0; i--) {
+    const ps = particleSystems[i];
+    const posAttr = ps.mesh.geometry.attributes.position;
+    
+    ps.life -= 0.035;
+
+    for (let j = 0; j < posAttr.count; j++) {
+      let x = posAttr.getX(j) + ps.velocities[j * 3] * 0.05;
+      let y = posAttr.getY(j) + ps.velocities[j * 3 + 1] * 0.05;
+      let z = posAttr.getZ(j) + ps.velocities[j * 3 + 2] * 0.05;
+
+      // Gravitasi jatuh
+      ps.velocities[j * 3 + 1] -= 0.4;
+
+      posAttr.setXYZ(j, x, y, z);
+    }
+
+    posAttr.needsUpdate = true;
+    ps.mesh.material.opacity = Math.max(0, ps.life);
+
+    if (ps.life <= 0) {
+      scene.remove(ps.mesh);
+      ps.mesh.geometry.dispose();
+      ps.mesh.material.dispose();
+      particleSystems.splice(i, 1);
+    }
+  }
 }
 
 /* --- BERSIHKAN AREA KERJA / RESET VIEWER --- */
@@ -193,14 +262,14 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Persegi:</strong> Klik permukaan kayu untuk membuat jejak lubang persegi <strong>(2d × 2d)</strong> sedalam nilai kedalaman.";
+      hintText.innerHTML = "🪛 <strong>Pahat Persegi:</strong> Klik permukaan kayu untuk menempatkan pahat persegi <strong>(2d × 2d)</strong>.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Lingkaran:</strong> Klik permukaan kayu untuk membuat jejak lubang lingkaran <strong>(Diameter D)</strong> sedalam nilai kedalaman.";
+      hintText.innerHTML = "🔘 <strong>Bor Lingkaran:</strong> Klik permukaan kayu untuk menempatkan mata bor lingkaran <strong>(Diameter D)</strong>.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
-      hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk memotong celah garis lurus sedalam nilai kedalaman.";
+      hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan mata gergaji.";
     }
 
     toolPanel.style.display = 'block';
@@ -224,7 +293,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
   const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
 
   if (activeAlat === 'pahat') {
-    // Pahat: Jejak Lubang Persegi (2d x 2d)
     const sideSize = valDiameter * 2;
     const chiselGeo = new THREE.BoxGeometry(sideSize, valDepth, sideSize);
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
@@ -239,7 +307,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
-    // Gergaji: Irisan Garis
     const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, 40);
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     cutterGeometryMesh = new THREE.Mesh(bladeGeo, bladeMat);
@@ -253,7 +320,6 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'bor') {
-    // Bor: Jejak Lubang Lingkaran (Diameter D)
     const radius = valDiameter / 2;
     const drillGeo = new THREE.CylinderGeometry(radius, radius, valDepth, 32);
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
@@ -296,7 +362,7 @@ function updateAlatTransform() {
   }
 }
 
-/* --- INTERAKSI KLIK SELEKSI & PENEMPATAN ALAT --- */
+/* --- INTERAKSI KLIK SELEKSI --- */
 function onViewportClick(event) {
   if (event.target.tagName !== 'CANVAS' || transformControl.dragging) return;
 
@@ -336,7 +402,7 @@ function onViewportClick(event) {
   }
 }
 
-/* --- EKSEKUSI PEMOTONGAN CSG & PENAMPILAN JEJAK VISUAL --- */
+/* --- EKSEKUSI CSG, ANIMASI PERCIKAN & VISUAL RONGGA DUA WARNA --- */
 function eksekusiPemotongan() {
   if (selectedObjIndex < 0 || !activeAlat) {
     alert("Pilih benda kerja dan alat terlebih dahulu!");
@@ -350,6 +416,9 @@ function eksekusiPemotongan() {
     targetObj.mainMesh.updateMatrixWorld();
     cutterGeometryMesh.updateMatrixWorld();
 
+    // Trigger Animasi Percikan Tahi Kayu pada Titik Potong
+    triggerWoodSparks(toolGroup.position);
+
     const cutterMeshWorld = cutterGeometryMesh.clone();
     cutterMeshWorld.position.copy(toolGroup.position);
     cutterMeshWorld.rotation.copy(toolGroup.rotation);
@@ -361,9 +430,21 @@ function eksekusiPemotongan() {
     const csgCutter = THREE.CSG.fromMesh(cutterMeshWorld);
 
     const csgResult = csgTarget.subtract(csgCutter);
-    const newMeshResult = THREE.CSG.toMesh(csgResult, targetObj.mainMesh.matrix);
 
-    newMeshResult.material = targetObj.mainMesh.material;
+    // Material Kayu dengan 2 Penampang (Kulit Luar & Dinding Dalam Bekas Pemotongan)
+    const woodOuterMat = new THREE.MeshStandardMaterial({
+      color: 0xc28e0e,
+      roughness: 0.6,
+      metalness: 0.1
+    });
+
+    const woodInnerCutMat = new THREE.MeshStandardMaterial({
+      color: 0x8b5a2b, // Warna Kayu Bagian Dalam (Cokelat Guratan)
+      roughness: 0.8,
+      metalness: 0.05
+    });
+
+    const newMeshResult = THREE.CSG.toMesh(csgResult, targetObj.mainMesh.matrix, [woodOuterMat, woodInnerCutMat]);
     newMeshResult.castShadow = true;
     newMeshResult.receiveShadow = true;
 
@@ -378,7 +459,7 @@ function eksekusiPemotongan() {
       bendaKerjaList.splice(selectedObjIndex, 1);
 
       separatedGeometries.forEach((subGeo, idx) => {
-        const subMesh = new THREE.Mesh(subGeo, targetObj.mainMesh.material);
+        const subMesh = new THREE.Mesh(subGeo, [woodOuterMat, woodInnerCutMat]);
         subMesh.castShadow = true;
         subMesh.receiveShadow = true;
 
@@ -406,7 +487,6 @@ function eksekusiPemotongan() {
         bendaKerjaList.push(newObjData);
       });
 
-      alert(`Sukses! ${parentName} terbelah menjadi ${separatedGeometries.length} bagian benda kerja terpisah.`);
       pilihBendaKerja(bendaKerjaList.length - 2);
 
     } else {
@@ -416,7 +496,6 @@ function eksekusiPemotongan() {
       targetObj.hasBeenCut = true;
 
       rebuildOverlays(targetObj);
-      alert(`Pemotongan CSG Berhasil pada ${targetObj.nama}!`);
     }
 
   } catch (err) {
@@ -495,7 +574,7 @@ function trianglesShareVertex(t1, t2, threshold = 0.0001) {
   return false;
 }
 
-/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT JEJAK BEKAS ALAT --- */
+/* --- REBUILD OVERLAYS STRIMIN & HIGHLIGHT BEKAS RONGGA (ORANGE) --- */
 function rebuildOverlays(item) {
   const toRemove = [];
   item.group.children.forEach(child => {
@@ -505,7 +584,7 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // 1. Mesh Strimin Wireframe Biru
+  // 1. Strimin Grid Overlay Wireframe
   const striminMat = new THREE.MeshBasicMaterial({
     color: 0x4a82e8,
     wireframe: true,
@@ -515,12 +594,12 @@ function rebuildOverlays(item) {
   const striminMesh = new THREE.Mesh(item.mainMesh.geometry, striminMat);
   item.group.add(striminMesh);
 
-  // 2. Outlines Edges Standar
+  // 2. Outlines Garis Batas Edges
   const edgesGeometry = new THREE.EdgesGeometry(item.mainMesh.geometry);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x61afef, linewidth: 2 });
   item.group.add(new THREE.LineSegments(edgesGeometry, lineMat));
 
-  // 3. Visual Jejak Benda Terkena Alat (Garis Batas Rongga Oranye Terang)
+  // 3. Highlight Penampang Bekas Pahat/Bor/Gergaji (Garis Batas Oranye)
   if (item.hasBeenCut) {
     const cutEdgesMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 3 });
     const cutHighlight = new THREE.LineSegments(edgesGeometry, cutEdgesMat);
@@ -721,5 +800,6 @@ function onWindowResize() {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  updateParticles(); // Animasi partikel percikan kayu
   renderer.render(scene, camera);
 }
