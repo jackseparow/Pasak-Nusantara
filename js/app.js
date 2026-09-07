@@ -22,6 +22,10 @@ let hoverMarker = null;
 let particleSystems = [];
 let isCuttingAnimation = false;
 
+// KONSTANTA SKALA CAD VOXEL: 1 Unit Visual/Koordinat = 100 Voxel Mikro
+const CAD_SCALE = 100;           // Jumlah mikro-voxel per 1 unit visual
+const VOXEL_SIZE = 1 / CAD_SCALE; // Ukuran fisik 1 voxel = 0.01 unit
+
 window.addEventListener('DOMContentLoaded', () => {
   initThreeJS();
   tambahBendaKerja();
@@ -34,7 +38,7 @@ function initThreeJS() {
   scene.background = new THREE.Color(0x0d0d12);
 
   camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(35, 35, 50);
+  camera.position.set(2.5, 2.5, 3.5);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -42,12 +46,12 @@ function initThreeJS() {
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.set(10, 10, 10);
+  controls.target.set(0.5, 0.5, 0.5);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
   transformControl = new THREE.TransformControls(camera, renderer.domElement);
-  transformControl.size = 0.85;
+  transformControl.size = 0.75;
   scene.add(transformControl);
 
   transformControl.addEventListener('dragging-changed', (event) => {
@@ -66,15 +70,15 @@ function initThreeJS() {
   scene.add(ambientLight);
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(40, 60, 40);
+  dirLight.position.set(5, 8, 5);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  // MENGATUR DINDING GRID KOORDINAT DI OKTAN POSITIF (XY, XZ, YZ)
+  // DINDING GRID CAD SKALA 1 SATUAN VISUAL (= 100 ELEMEN MIKRO)
   setupCadGridWalls();
 
   // Marker Titik Sorot Neon
-  const dotGeo = new THREE.SphereGeometry(0.3, 16, 16);
+  const dotGeo = new THREE.SphereGeometry(0.015, 16, 16);
   const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0055, wireframe: true });
   hoverMarker = new THREE.Mesh(dotGeo, dotMat);
   hoverMarker.visible = false;
@@ -88,44 +92,45 @@ function initThreeJS() {
   animate();
 }
 
-/* --- DINDING GRID KOORDINAT CAD DENGAN RULER --- */
+/* --- DINDING GRID CAD 1 SATUAN SKALA (1 SATUAN = 100 VOXEL) --- */
 function setupCadGridWalls() {
-  const size = 60;
-  const divisions = 60;
+  const totalUnits = 5; // Area Kerja 5x5x5 Unit Visual (Setara 500x500 Voxel)
+  const divisions = totalUnits; // 1 Kotak Grid Utama = Tepat 1 Unit Visual
 
-  const gridXZ = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x333344);
-  gridXZ.position.set(size / 2, 0, size / 2);
+  const gridXZ = new THREE.GridHelper(totalUnits, divisions, 0x00ffcc, 0x333344);
+  gridXZ.position.set(totalUnits / 2, 0, totalUnits / 2);
   scene.add(gridXZ);
 
-  const gridXY = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x222233);
+  const gridXY = new THREE.GridHelper(totalUnits, divisions, 0x00ffcc, 0x222233);
   gridXY.rotation.x = Math.PI / 2;
-  gridXY.position.set(size / 2, size / 2, 0);
+  gridXY.position.set(totalUnits / 2, totalUnits / 2, 0);
   scene.add(gridXY);
 
-  const gridYZ = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x222233);
+  const gridYZ = new THREE.GridHelper(totalUnits, divisions, 0x00ffcc, 0x222233);
   gridYZ.rotation.z = Math.PI / 2;
-  gridYZ.position.set(0, size / 2, size / 2);
+  gridYZ.position.set(0, totalUnits / 2, totalUnits / 2);
   scene.add(gridYZ);
 
   const axesGroup = new THREE.Group();
 
   const lineXMat = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 3 });
-  const lineXGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(size,0,0)]);
+  const lineXGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(totalUnits,0,0)]);
   axesGroup.add(new THREE.Line(lineXGeo, lineXMat));
 
   const lineYMat = new THREE.LineBasicMaterial({ color: 0x33ff33, linewidth: 3 });
-  const lineYGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,size,0)]);
+  const lineYGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,totalUnits,0)]);
   axesGroup.add(new THREE.Line(lineYGeo, lineYMat));
 
   const lineZMat = new THREE.LineBasicMaterial({ color: 0x3388ff, linewidth: 4 });
-  const lineZGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,size * 1.2)]);
+  const lineZGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,totalUnits * 1.2)]);
   axesGroup.add(new THREE.Line(lineZGeo, lineZMat));
 
+  // Penanda Sub-Skala setiap 0.5 Unit Visual
   const tickMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
-  for (let z = 5; z <= size * 1.2; z += 5) {
+  for (let z = 0.5; z <= totalUnits * 1.2; z += 0.5) {
     const tickGeo = new THREE.BufferGeometry().setFromPoints([
       new THREE.Vector3(0, 0, z),
-      new THREE.Vector3(1, 0, z)
+      new THREE.Vector3(0.05, 0, z)
     ]);
     axesGroup.add(new THREE.Line(tickGeo, tickMat));
   }
@@ -133,7 +138,7 @@ function setupCadGridWalls() {
   scene.add(axesGroup);
 }
 
-/* --- DETEKSI HOVER UNTUK TOOLTIP KOORDINAT MELAYANG --- */
+/* --- DETEKSI HOVER TOOLTIP KOORDINAT VISUAL (SINKRON DENGAN SKALA SATUAN) --- */
 function onViewportHover(event) {
   if (transformControl.dragging || isCuttingAnimation) return;
 
@@ -166,9 +171,10 @@ function onViewportHover(event) {
     if (parentGroup) {
       const localPos = parentGroup.worldToLocal(hit.point.clone());
 
-      const locX = localPos.x.toFixed(1);
-      const locY = localPos.y.toFixed(1);
-      const locZ = localPos.z.toFixed(1);
+      // Tampilkan Angka Koordinat dalam Satuan Visual Presisi 2 Desimal
+      const locX = localPos.x.toFixed(2);
+      const locY = localPos.y.toFixed(2);
+      const locZ = localPos.z.toFixed(2);
 
       hoverMarker.position.copy(hit.point);
       hoverMarker.visible = true;
@@ -190,16 +196,16 @@ function onViewportHover(event) {
 
 /* --- ANIMASI PERCIKAN TAHI KAYU --- */
 function triggerWoodSparks(position) {
-  const particleCount = 35;
+  const particleCount = 25;
   const geometry = new THREE.BufferGeometry();
   const positions = [];
   const velocities = [];
 
   for (let i = 0; i < particleCount; i++) {
     positions.push(position.x, position.y, position.z);
-    const vx = (Math.random() - 0.5) * 14;
-    const vy = Math.random() * 12 + 3;
-    const vz = (Math.random() - 0.5) * 14;
+    const vx = (Math.random() - 0.5) * 0.8;
+    const vy = Math.random() * 0.6 + 0.2;
+    const vz = (Math.random() - 0.5) * 0.8;
     velocities.push(vx, vy, vz);
   }
 
@@ -207,7 +213,7 @@ function triggerWoodSparks(position) {
 
   const material = new THREE.PointsMaterial({
     color: 0xdd9933,
-    size: 0.7,
+    size: 0.02,
     transparent: true,
     opacity: 1.0
   });
@@ -226,14 +232,14 @@ function updateParticles() {
   for (let i = particleSystems.length - 1; i >= 0; i--) {
     const ps = particleSystems[i];
     const posAttr = ps.mesh.geometry.attributes.position;
-    ps.life -= 0.04;
+    ps.life -= 0.05;
 
     for (let j = 0; j < posAttr.count; j++) {
       let x = posAttr.getX(j) + ps.velocities[j * 3] * 0.05;
       let y = posAttr.getY(j) + ps.velocities[j * 3 + 1] * 0.05;
       let z = posAttr.getZ(j) + ps.velocities[j * 3 + 2] * 0.05;
 
-      ps.velocities[j * 3 + 1] -= 0.5;
+      ps.velocities[j * 3 + 1] -= 0.02;
       posAttr.setXYZ(j, x, y, z);
     }
 
@@ -369,11 +375,11 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Lebar Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Sorot permukaan kayu untuk melihat titik koordinat sebelum menempelkan pahat.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Penampang potong persegi <strong>(d × d)</strong> presisi.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Sorot permukaan kayu untuk melihat titik koordinat sebelum mengebor.";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Penampang potong melingkar murni (Diameter D).";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan bilah gergaji.";
@@ -390,18 +396,18 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D --- */
+/* --- MODEL ALAT 3D SKALA PRESISI --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
 
   toolGroup = new THREE.Group();
-  const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
-  const valDepth = parseFloat(document.getElementById('toolDepth').value) || 4;
+  const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 0.2;
+  const valDepth = parseFloat(document.getElementById('toolDepth').value) || 0.5;
 
   if (activeAlat === 'bor') {
     const radius = valDiameter / 2;
-    const tipHeight = 1.2;
+    const tipHeight = 0.15;
 
     const drillMat = new THREE.MeshStandardMaterial({ color: 0x4a82e8, metalness: 0.8, roughness: 0.3 });
 
@@ -414,8 +420,8 @@ function create3DTool(positionPoint = null, normalVector = null) {
     drillGeo.translate(0, tipHeight + (valDepth / 2), 0);
     const mainDrill = new THREE.Mesh(drillGeo, drillMat);
 
-    const headGeo = new THREE.BoxGeometry(Math.max(2, valDiameter + 0.5), 3, Math.max(2, valDiameter + 0.5));
-    headGeo.translate(0, tipHeight + valDepth + 1.5, 0);
+    const headGeo = new THREE.BoxGeometry(Math.max(0.3, valDiameter + 0.1), 0.2, Math.max(0.3, valDiameter + 0.1));
+    headGeo.translate(0, tipHeight + valDepth + 0.1, 0);
     const headMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
     const head = new THREE.Mesh(headGeo, headMat);
 
@@ -432,8 +438,8 @@ function create3DTool(positionPoint = null, normalVector = null) {
     const chiselMat = new THREE.MeshStandardMaterial({ color: 0xe0e0e0, metalness: 0.8, roughness: 0.2 });
     const mainChisel = new THREE.Mesh(chiselGeo, chiselMat);
 
-    const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 4, 12);
-    handleGeo.translate(0, valDepth + 2, 0);
+    const handleGeo = new THREE.CylinderGeometry(sideSize * 0.4, sideSize * 0.3, 0.4, 12);
+    handleGeo.translate(0, valDepth + 0.2, 0);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
     const handle = new THREE.Mesh(handleGeo, handleMat);
 
@@ -441,20 +447,20 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.add(handle);
 
   } else if (activeAlat === 'gergaji') {
-    let targetSpan = 15;
+    let targetSpan = 1.5;
     if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
       const b = bendaKerjaList[selectedObjIndex];
       targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
     }
 
-    const bladeGeo = new THREE.BoxGeometry(0.2, valDepth, targetSpan);
+    const bladeGeo = new THREE.BoxGeometry(0.02, valDepth, targetSpan);
     bladeGeo.translate(0, valDepth / 2, 0);
 
     const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.8, roughness: 0.2 });
     const mainBlade = new THREE.Mesh(bladeGeo, bladeMat);
 
-    const handleGeo = new THREE.BoxGeometry(0.6, 2.5, 4);
-    handleGeo.translate(0, valDepth + 1.25, -targetSpan / 2);
+    const handleGeo = new THREE.BoxGeometry(0.08, 0.25, 0.4);
+    handleGeo.translate(0, valDepth + 0.12, -targetSpan / 2);
     const handleMat = new THREE.MeshStandardMaterial({ color: 0xd9534f });
     const handle = new THREE.Mesh(handleGeo, handleMat);
 
@@ -473,7 +479,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
     toolGroup.position.y += bendaKerjaList[selectedObjIndex].t;
   } else {
-    toolGroup.position.set(5, 10, 5);
+    toolGroup.position.set(0.5, 1, 0.5);
   }
 
   scene.add(toolGroup);
@@ -570,16 +576,16 @@ function eksekusiPemotongan() {
       toolGroup.quaternion.copy(startRot);
       toolGroup.rotateY(progress * Math.PI * 20);
 
-      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.8, 0).applyQuaternion(startRot);
+      const depthOffset = new THREE.Vector3(0, -Math.sin(progress * Math.PI) * 0.1, 0).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(depthOffset);
 
     } else if (activeAlat === 'gergaji') {
-      const stroke = Math.sin(progress * Math.PI * 10) * 3;
+      const stroke = Math.sin(progress * Math.PI * 10) * 0.2;
       const forwardVec = new THREE.Vector3(0, 0, stroke).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(forwardVec);
 
     } else if (activeAlat === 'pahat') {
-      const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 1.5;
+      const hammer = Math.abs(Math.sin(progress * Math.PI * 8)) * 0.1;
       const hammerVec = new THREE.Vector3(0, -hammer, 0).applyQuaternion(startRot);
       toolGroup.position.copy(startPos).add(hammerVec);
     }
@@ -599,10 +605,10 @@ function eksekusiPemotongan() {
   requestAnimationFrame(animateToolAction);
 }
 
-/* --- PEMOTONGAN HYBRID VOXEL + LINER HALUS UNTUK BOR --- */
+/* --- PEMOTONGAN MIKRO-VOXEL SKALA PRESISI --- */
 function prosesPemotonganVoxelFisik(targetObj) {
-  const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 1;
-  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 4;
+  const valDiameter = parseFloat(document.getElementById('toolDiameter').value) || 0.2;
+  const valDepthInput = parseFloat(document.getElementById('toolDepth').value) || 0.5;
 
   toolGroup.updateMatrixWorld();
   const inverseToolMatrix = new THREE.Matrix4().copy(toolGroup.matrixWorld).invert();
@@ -619,7 +625,7 @@ function prosesPemotonganVoxelFisik(targetObj) {
     const voxelInToolSpace = voxelWorldPos.clone().applyMatrix4(inverseToolMatrix);
     const depthIn = -voxelInToolSpace.y;
 
-    if (depthIn >= -0.2 && depthIn <= valDepthInput) {
+    if (depthIn >= -0.02 && depthIn <= valDepthInput) {
       
       if (activeAlat === 'bor') {
         const distRadial = Math.sqrt(voxelInToolSpace.x * voxelInToolSpace.x + voxelInToolSpace.z * voxelInToolSpace.z);
@@ -633,12 +639,12 @@ function prosesPemotonganVoxelFisik(targetObj) {
         }
 
       } else { // Gergaji
-        let targetSpan = 15;
+        let targetSpan = 1.5;
         if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
           const b = bendaKerjaList[selectedObjIndex];
           targetSpan = Math.max(b.p, b.l, b.t) * 1.2;
         }
-        if (Math.abs(voxelInToolSpace.x) <= 0.4 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
+        if (Math.abs(voxelInToolSpace.x) <= 0.02 && Math.abs(voxelInToolSpace.z) <= targetSpan / 2) {
           toRemove.push(voxel);
         }
       }
@@ -650,32 +656,6 @@ function prosesPemotonganVoxelFisik(targetObj) {
     v.geometry.dispose();
     v.material.dispose();
   });
-
-  if (activeAlat === 'bor') {
-    const holeGeo = new THREE.CylinderGeometry(radiusBor, radiusBor, valDepthInput, 32, 1, true);
-    holeGeo.translate(0, -valDepthInput / 2, 0);
-
-    const innerWoodMat = new THREE.MeshStandardMaterial({
-      color: 0x1f0f02,
-      roughness: 0.9,
-      metalness: 0.1,
-      side: THREE.DoubleSide
-    });
-
-    const innerCylinder = new THREE.Mesh(holeGeo, innerWoodMat);
-    const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
-    innerCylinder.position.copy(localHitPos);
-
-    innerCylinder.quaternion.copy(toolGroup.quaternion);
-    innerCylinder.quaternion.premultiply(targetObj.group.quaternion.clone().invert());
-
-    targetObj.group.add(innerCylinder);
-
-    const edges = new THREE.EdgesGeometry(holeGeo);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 });
-    const line = new THREE.LineSegments(edges, lineMat);
-    innerCylinder.add(line);
-  }
 
   targetObj.hasBeenCut = true;
   rebuildOverlays(targetObj);
@@ -740,13 +720,14 @@ function tambahBendaKerja() {
   
   const defaultColor = isBalok ? '#c28e0e' : '#4a2f13';
 
+  // Nilai Default Input UI (Dalam Satuan Visual Standard)
   const objData = {
     id: Date.now(),
     nama: isBalok ? `Kayu Balok #${index}` : `Pasak Silinder #${index}`,
     jenis: jenisBahanBaru,
-    p: isBalok ? 10 : 25,
-    l: 10,
-    t: isBalok ? 30 : 6,
+    p: isBalok ? 1.0 : 1.5,
+    l: 1.0,
+    t: isBalok ? 1.5 : 1.0, // Diameter = 1.0 Unit Visual
     color: defaultColor,
     opacity: 1.0,
     group: new THREE.Group(),
@@ -851,12 +832,12 @@ function updateObjekTerpilih() {
   const tLama = item.t;
 
   if (item.jenis === 'balok') {
-    item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objP').value) || 10));
-    item.l = Math.max(1, Math.round(parseFloat(document.getElementById('objL').value) || 10));
-    item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objT').value) || 30));
+    item.p = Math.max(0.1, parseFloat(document.getElementById('objP').value) || 1.0);
+    item.l = Math.max(0.1, parseFloat(document.getElementById('objL').value) || 1.0);
+    item.t = Math.max(0.1, parseFloat(document.getElementById('objT').value) || 1.5);
   } else {
-    item.t = Math.max(0.5, parseFloat(document.getElementById('objDiameter').value) || 6);
-    item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objTinggiSilinder').value) || 25));
+    item.t = Math.max(0.1, parseFloat(document.getElementById('objDiameter').value) || 1.0);
+    item.p = Math.max(0.1, parseFloat(document.getElementById('objTinggiSilinder').value) || 1.5);
   }
 
   item.color = document.getElementById('objColor').value;
@@ -874,7 +855,7 @@ function updateObjekTerpilih() {
   renderObjectListUI();
 }
 
-/* --- PERBAIKAN GENERATOR SILINDER VOXEL KELINGKARAN MURNI --- */
+/* --- GENERATOR SILINDER MIKRO-VOXEL (1 SATUAN = 100 ELEMEN -> BULAT MULUS PERFECT) --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -884,8 +865,7 @@ function updateObjekMesh(item) {
   item.voxelsGroup = new THREE.Group();
   group.add(item.voxelsGroup);
 
-  const voxelSize = 0.3; // Densitas voxel tinggi agar lingkaran silinder halus
-  const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+  const boxGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
   
   const woodMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(item.color),
@@ -896,34 +876,33 @@ function updateObjekMesh(item) {
   });
 
   if (item.jenis === 'balok') {
-    for (let x = 0; x < item.p; x += voxelSize) {
-      for (let y = 0; y < item.t; y += voxelSize) {
-        for (let z = 0; z < item.l; z += voxelSize) {
+    for (let x = 0; x < item.p; x += VOXEL_SIZE) {
+      for (let y = 0; y < item.t; y += VOXEL_SIZE) {
+        for (let z = 0; z < item.l; z += VOXEL_SIZE) {
           const vMesh = new THREE.Mesh(boxGeo, woodMat);
-          vMesh.position.set(x + voxelSize/2, y + voxelSize/2, z + voxelSize/2);
+          vMesh.position.set(x + VOXEL_SIZE/2, y + VOXEL_SIZE/2, z + VOXEL_SIZE/2);
           item.voxelsGroup.add(vMesh);
         }
       }
     }
   } else { 
-    // SILINDER MELINGKAR MURNI PRESISI
-    const radius = item.t / 2; // Radius silinder = Diameter / 2
-    const centerX = radius;    // Titik pusat X silinder
-    const centerZ = radius;    // Titik pusat Z silinder
+    // SILINDER DENGAN DENSITAS 100 MIKRO-VOXEL PER 1 UNIT VISUAL
+    const radius = item.t / 2;
+    const centerX = radius;
+    const centerZ = radius;
 
-    for (let x = 0; x < item.t; x += voxelSize) {
-      for (let z = 0; z < item.t; z += voxelSize) {
+    for (let x = 0; x < item.t; x += VOXEL_SIZE) {
+      for (let z = 0; z < item.t; z += VOXEL_SIZE) {
         
-        // Hitung jarak titik pusat voxel ke pusat silinder
-        const distX = (x + voxelSize / 2) - centerX;
-        const distZ = (z + voxelSize / 2) - centerZ;
+        const distX = (x + VOXEL_SIZE / 2) - centerX;
+        const distZ = (z + VOXEL_SIZE / 2) - centerZ;
         const distRadial = Math.sqrt(distX * distX + distZ * distZ);
 
-        // Hanya buat voxel jika posisi berada di dalam radius melingkar
+        // Hanya membentuk voxel di dalam jejari lingkar $r$
         if (distRadial <= radius) {
-          for (let y = 0; y < item.p; y += voxelSize) {
+          for (let y = 0; y < item.p; y += VOXEL_SIZE) {
             const vMesh = new THREE.Mesh(boxGeo, woodMat);
-            vMesh.position.set(x + voxelSize / 2, y + voxelSize / 2, z + voxelSize / 2);
+            vMesh.position.set(x + VOXEL_SIZE / 2, y + VOXEL_SIZE / 2, z + VOXEL_SIZE / 2);
             item.voxelsGroup.add(vMesh);
           }
         }
