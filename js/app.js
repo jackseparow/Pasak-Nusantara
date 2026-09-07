@@ -30,8 +30,9 @@ function initThreeJS() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d0d12);
 
+  // Kamera diatur melihat oktan positif dari sudut pandang depan-atas-samping
   camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(35, 35, 45);
+  camera.position.set(45, 45, 65);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -39,6 +40,7 @@ function initThreeJS() {
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(20, 15, 20); // Fokus awal ke tengah area positif
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
@@ -62,21 +64,71 @@ function initThreeJS() {
   scene.add(ambientLight);
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(30, 50, 30);
+  dirLight.position.set(40, 60, 40);
   dirLight.castShadow = true;
   scene.add(dirLight);
 
-  const gridHelper = new THREE.GridHelper(60, 60, 0x444455, 0x222233);
-  scene.add(gridHelper);
-
-  const globalAxes = new THREE.AxesHelper(15);
-  scene.add(globalAxes);
+  // MENGATUR DINDING GRID KOORDINAT DI OKTAN POSITIF (XY, XZ, YZ)
+  setupCadGridWalls();
 
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
 
   onWindowResize();
   animate();
+}
+
+/* --- DINDING GRID KOORDINAT DENGAN PENANDA SKALA (CAD RULER) --- */
+function setupCadGridWalls() {
+  const size = 60;
+  const divisions = 60; // 1 Kotak Grid = 1 Unit Ukuran
+
+  // 1. Grid Lantai XZ (Y = 0)
+  const gridXZ = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x333344);
+  gridXZ.position.set(size / 2, 0, size / 2);
+  scene.add(gridXZ);
+
+  // 2. Grid Dinding Belakang XY (Z = 0)
+  const gridXY = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x222233);
+  gridXY.rotation.x = Math.PI / 2;
+  gridXY.position.set(size / 2, size / 2, 0);
+  scene.add(gridXY);
+
+  // 3. Grid Dinding Samping YZ (X = 0)
+  const gridYZ = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x222233);
+  gridYZ.rotation.z = Math.PI / 2;
+  gridYZ.position.set(0, size / 2, size / 2);
+  scene.add(gridYZ);
+
+  // 4. SUMBU TIGA DIMENSI POSITIF TERPANJANG DENGAN PENGGARIS (RULER TICKS)
+  const axesGroup = new THREE.Group();
+
+  // Sumbu X (Merah)
+  const lineXMat = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 3 });
+  const lineXGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(size,0,0)]);
+  axesGroup.add(new THREE.Line(lineXGeo, lineXMat));
+
+  // Sumbu Y (Hijau)
+  const lineYMat = new THREE.LineBasicMaterial({ color: 0x33ff33, linewidth: 3 });
+  const lineYGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,size,0)]);
+  axesGroup.add(new THREE.Line(lineYGeo, lineYMat));
+
+  // Sumbu Z Dipanjangkan (Biru Neon)
+  const lineZMat = new THREE.LineBasicMaterial({ color: 0x3388ff, linewidth: 4 });
+  const lineZGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,size * 1.2)]);
+  axesGroup.add(new THREE.Line(lineZGeo, lineZMat));
+
+  // Menambahkan Titik Penanda Skala Penggaris (Ruler Ticks) setiap 5 Unit di Sumbu Z
+  const tickMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
+  for (let z = 5; z <= size * 1.2; z += 5) {
+    const tickGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, z),
+      new THREE.Vector3(1, 0, z)
+    ]);
+    axesGroup.add(new THREE.Line(tickGeo, tickMat));
+  }
+
+  scene.add(axesGroup);
 }
 
 /* --- ANIMASI PERCIKAN TAHI KAYU --- */
@@ -260,11 +312,11 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Lebar Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Lubang persegi <strong>(d × d)</strong> searah bilah pahat.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Penampang potong persegi <strong>(d × d)</strong> presisi.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Lubang melingkar mulus presisi D.";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Penampang potong melingkar murni (Diameter D).";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan bilah gergaji.";
@@ -281,7 +333,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D --- */
+/* --- MODEL ALAT 3D (PIVOT UJUNG MATA POTONG) --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -364,7 +416,7 @@ function create3DTool(positionPoint = null, normalVector = null) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
     toolGroup.position.y += bendaKerjaList[selectedObjIndex].t / 2;
   } else {
-    toolGroup.position.set(0, 15, 0);
+    toolGroup.position.set(10, 15, 10);
   }
 
   scene.add(toolGroup);
@@ -536,28 +588,25 @@ function prosesPemotonganVoxelFisik(targetObj) {
     }
   });
 
-  // Hapus Voxel Terpotong dari Scene
   toRemove.forEach(v => {
     targetObj.voxelsGroup.remove(v);
     v.geometry.dispose();
     v.material.dispose();
   });
 
-  // TEKNIK HYBRID: Jika Alat Bor, Pasang Silinder Dinding Dalam Halus (32 Segmen)
+  // Silinder Dinding Dalam Halus khusus Bor
   if (activeAlat === 'bor') {
-    const holeGeo = new THREE.CylinderGeometry(radiusBor, radiusBor, valDepthInput, 32, 1, true); // openEnded = true (Lorong tembus)
+    const holeGeo = new THREE.CylinderGeometry(radiusBor, radiusBor, valDepthInput, 32, 1, true);
     holeGeo.translate(0, -valDepthInput / 2, 0);
 
     const innerWoodMat = new THREE.MeshStandardMaterial({
-      color: 0x1f0f02, // Cokelat serat dalam kayu
+      color: 0x1f0f02,
       roughness: 0.9,
       metalness: 0.1,
       side: THREE.DoubleSide
     });
 
     const innerCylinder = new THREE.Mesh(holeGeo, innerWoodMat);
-
-    // Posisikan Dinding Halus Tepat di Titik Potong Bor
     const localHitPos = targetObj.group.worldToLocal(toolGroup.position.clone());
     innerCylinder.position.copy(localHitPos);
 
@@ -566,7 +615,6 @@ function prosesPemotonganVoxelFisik(targetObj) {
 
     targetObj.group.add(innerCylinder);
 
-    // Penegas Garis Tepi Melingkar
     const edges = new THREE.EdgesGeometry(holeGeo);
     const lineMat = new THREE.LineBasicMaterial({ color: 0xff8800, linewidth: 2 });
     const line = new THREE.LineSegments(edges, lineMat);
@@ -574,11 +622,12 @@ function prosesPemotonganVoxelFisik(targetObj) {
   }
 
   targetObj.hasBeenCut = true;
-  rebuildOverlays(targetObj);
+  rebuildOverlays(item);
 }
 
-/* --- KOORDINAT TERLIHAT (GRID LOKAL + BOUNDING RULER) --- */
+/* --- REBUILD OVERLAY BOUNDING RULER --- */
 function rebuildOverlays(item) {
+  if (!item) return;
   const toRemove = [];
   item.group.children.forEach(child => {
     if (child instanceof THREE.AxesHelper || child.isRulerOverlay) {
@@ -587,10 +636,7 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  const objectAxes = new THREE.AxesHelper(Math.max(item.t * 0.4, 8));
-  objectAxes.isRulerOverlay = true;
-  item.group.add(objectAxes);
-
+  // Bounding Box Neon & Skala Ukuran
   if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex] === item) {
     let sizeX = item.jenis === 'balok' ? item.p : item.t;
     let sizeY = item.jenis === 'balok' ? item.t : item.p;
@@ -601,13 +647,13 @@ function rebuildOverlays(item) {
     const boxLineMat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 });
     const boundingBoxLine = new THREE.LineSegments(boxEdges, boxLineMat);
     
-    boundingBoxLine.position.set(0, sizeY / 2, 0);
+    boundingBoxLine.position.set(sizeX / 2, sizeY / 2, sizeZ / 2);
     boundingBoxLine.isRulerOverlay = true;
     item.group.add(boundingBoxLine);
   }
 }
 
-/* --- MANAJEMEN BENDA KERJA --- */
+/* --- MANAJEMEN BENDA KERJA (SISTEM KOORDINAT POSITIF) --- */
 function setJenisBahanBaru(jenis) {
   jenisBahanBaru = jenis;
   document.getElementById('type-balok').classList.toggle('active', jenis === 'balok');
@@ -632,8 +678,9 @@ function tambahBendaKerja() {
   };
 
   objData.group.isBendaGroup = true;
-  const offsetX = (bendaKerjaList.length) * 12;
-  objData.group.position.set(offsetX, 0, 0);
+  // Menempatkan Benda Kerja di Titik OKTAN POSITIF (X >= 5, Y = 0, Z >= 5)
+  const offsetX = 5 + (bendaKerjaList.length) * 15;
+  objData.group.position.set(offsetX, 0, 5);
 
   scene.add(objData.group);
   bendaKerjaList.push(objData);
@@ -738,7 +785,7 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
-/* --- GENERATOR VOXEL DENSITAS TINGGI --- */
+/* --- GENERATOR VOXEL DENGAN LANDASAN KOORDINAT POSITIF (X>=0, Y>=0, Z>=0) --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -759,15 +806,11 @@ function updateObjekMesh(item) {
   });
 
   if (item.jenis === 'balok') {
-    const halfP = item.p / 2;
-    const halfT = item.t / 2;
-    const halfL = item.l / 2;
-
-    for (let x = -halfP; x < halfP; x += voxelSize) {
-      for (let y = -halfT; y < halfT; y += voxelSize) {
-        for (let z = -halfL; z < halfL; z += voxelSize) {
+    for (let x = 0; x < item.p; x += voxelSize) {
+      for (let y = 0; y < item.t; y += voxelSize) {
+        for (let z = 0; z < item.l; z += voxelSize) {
           const vMesh = new THREE.Mesh(boxGeo, woodMat);
-          vMesh.position.set(x + voxelSize/2, y + voxelSize/2 + item.t/2, z + voxelSize/2);
+          vMesh.position.set(x + voxelSize/2, y + voxelSize/2, z + voxelSize/2);
           item.voxelsGroup.add(vMesh);
         }
       }
@@ -780,7 +823,7 @@ function updateObjekMesh(item) {
         if (Math.sqrt(x*x + z*z) <= radius) {
           for (let y = 0; y < item.p; y += voxelSize) {
             const vMesh = new THREE.Mesh(boxGeo, woodMat);
-            vMesh.position.set(x + voxelSize/2, y + voxelSize/2, z + voxelSize/2);
+            vMesh.position.set(x + radius + voxelSize/2, y + voxelSize/2, z + radius + voxelSize/2);
             item.voxelsGroup.add(vMesh);
           }
         }
