@@ -34,7 +34,7 @@ function initThreeJS() {
   scene.background = new THREE.Color(0x0d0d12);
 
   camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-  camera.position.set(45, 45, 65);
+  camera.position.set(35, 35, 50);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(container.clientWidth, container.clientHeight);
@@ -42,7 +42,7 @@ function initThreeJS() {
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.set(20, 15, 20);
+  controls.target.set(10, 10, 10);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
@@ -73,7 +73,7 @@ function initThreeJS() {
   // MENGATUR DINDING GRID KOORDINAT DI OKTAN POSITIF (XY, XZ, YZ)
   setupCadGridWalls();
 
-  // Buat Marker Titik Sorot (Dot Neon Merah/Hijau)
+  // Marker Titik Sorot Neon
   const dotGeo = new THREE.SphereGeometry(0.3, 16, 16);
   const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0055, wireframe: true });
   hoverMarker = new THREE.Mesh(dotGeo, dotMat);
@@ -88,7 +88,7 @@ function initThreeJS() {
   animate();
 }
 
-/* --- DINDING GRID KOORDINAT DENGAN PENANDA SKALA (CAD RULER) --- */
+/* --- DINDING GRID KOORDINAT CAD DENGAN RULER --- */
 function setupCadGridWalls() {
   const size = 60;
   const divisions = 60;
@@ -133,7 +133,7 @@ function setupCadGridWalls() {
   scene.add(axesGroup);
 }
 
-/* --- DETEKSI HOVER DENGAN TOOLTIP KOORDINAT MELAYANG --- */
+/* --- DETEKSI HOVER UNTUK TOOLTIP KOORDINAT MELAYANG --- */
 function onViewportHover(event) {
   if (transformControl.dragging || isCuttingAnimation) return;
 
@@ -164,18 +164,15 @@ function onViewportHover(event) {
     }
 
     if (parentGroup) {
-      // Hitung Koordinat Lokal terhadap Kayu
       const localPos = parentGroup.worldToLocal(hit.point.clone());
 
       const locX = localPos.x.toFixed(1);
       const locY = localPos.y.toFixed(1);
       const locZ = localPos.z.toFixed(1);
 
-      // Tampilkan Marker Dot Neon di Titik Sorot
       hoverMarker.position.copy(hit.point);
       hoverMarker.visible = true;
 
-      // Update Posisi HTML Tooltip di Layar
       const screenX = event.clientX - rect.left;
       const screenY = event.clientY - rect.top;
 
@@ -474,9 +471,9 @@ function create3DTool(positionPoint = null, normalVector = null) {
 
   } else if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex]) {
     toolGroup.position.copy(bendaKerjaList[selectedObjIndex].group.position);
-    toolGroup.position.y += bendaKerjaList[selectedObjIndex].t / 2;
+    toolGroup.position.y += bendaKerjaList[selectedObjIndex].t;
   } else {
-    toolGroup.position.set(10, 15, 10);
+    toolGroup.position.set(5, 10, 5);
   }
 
   scene.add(toolGroup);
@@ -711,7 +708,7 @@ function rebuildOverlays(item) {
   }
 }
 
-/* --- MANAJEMEN BENDA KERJA --- */
+/* --- MANAJEMEN BENDA KERJA (POSISI AWAL SELALU DI (0,0,0)) --- */
 function setJenisBahanBaru(jenis) {
   jenisBahanBaru = jenis;
   document.getElementById('type-balok').classList.toggle('active', jenis === 'balok');
@@ -736,8 +733,9 @@ function tambahBendaKerja() {
   };
 
   objData.group.isBendaGroup = true;
-  const offsetX = 5 + (bendaKerjaList.length) * 15;
-  objData.group.position.set(offsetX, 0, 5);
+  
+  // PERBAIKAN 2: BENDA KERJA PERTAMA/BARU SELALU DIPOSISIKAN TEPAT DI TITIK INISIAL (0,0,0)
+  objData.group.position.set(0, 0, 0);
 
   scene.add(objData.group);
   bendaKerjaList.push(objData);
@@ -842,7 +840,7 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
-/* --- GENERATOR VOXEL KOORDINAT POSITIF --- */
+/* --- GENERATOR VOXEL DENGAN SUDAH BERDIRI TEPAT DI TITIK INISIAL (0,0,0) --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -863,6 +861,7 @@ function updateObjekMesh(item) {
   });
 
   if (item.jenis === 'balok') {
+    // Sudut kiri-bawah-depan tepat di (0,0,0)
     for (let x = 0; x < item.p; x += voxelSize) {
       for (let y = 0; y < item.t; y += voxelSize) {
         for (let z = 0; z < item.l; z += voxelSize) {
