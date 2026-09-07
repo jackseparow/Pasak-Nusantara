@@ -3,109 +3,194 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulasi Pemotongan Kayu 3D</title>
+  <title>Simulasi Woodworking 3D - CAD Mode</title>
   <link rel="stylesheet" href="css/style.css">
   
-  <!-- Three.js Library & Controls -->
+  <!-- Three.js & Controls -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+  <script src="js/app.js" defer></script>
 </head>
 <body>
-
-  <!-- Area Viewport 3D Canvas -->
-  <div id="viewport"></div>
-
-  <!-- Rotation Tooltip -->
-  <div id="rotationTooltip" style="display: none;">Rotasi: X: 0° | Y: 0° | Z: 0°</div>
-
-  <!-- Sidebar & Controls UI -->
-  <div class="sidebar">
-    <h3>🪵 Area Kerja Woodworking</h3>
-    
-    <!-- Fase Switcher -->
-    <div class="btn-group">
-      <button id="fasePahat" class="active" onclick="setFase('pahat')">🪛 Pahat</button>
-      <button id="faseRakit" onclick="setFase('rakit')">🧩 Rakit</button>
-      <button id="faseUji" onclick="setFase('uji')">📐 Uji</button>
-    </div>
-
-    <!-- Pilihan Alat Pemahat -->
-    <h4>Alat Pemahat</h4>
-    <div class="btn-group">
-      <button id="item-gergaji" onclick="toggleAlat('gergaji')">🪚 Gergaji</button>
-      <button id="item-pahat" onclick="toggleAlat('pahat')">🪛 Pahat</button>
-      <button id="item-bor" onclick="toggleAlat('bor')">🔘 Bor</button>
-    </div>
-
-    <!-- Tambah Benda Kerja -->
-    <h4>Tambah Benda Kerja</h4>
-    <div class="btn-group">
-      <button id="type-balok" class="active" onclick="setJenisBahanBaru('balok')">Balok</button>
-      <button id="type-silinder" onclick="setJenisBahanBaru('silinder')">Silinder</button>
-    </div>
-    <button class="btn-primary" onclick="tambahBendaKerja()">+ Tambah Bahan</button>
-
-    <!-- Daftar Benda Kerja -->
-    <h4>Daftar Benda Kerja</h4>
-    <div id="objectList"></div>
-
-    <!-- Pengaturan Objek Terpilih -->
-    <div id="selectedObjectControls" style="display: none;">
-      <h4>Edit Dimensi Objek</h4>
+  <div id="app-container">
+    <!-- Viewport 3D Canvas -->
+    <div id="viewport">
       
-      <div id="groupBalokDim" class="input-group">
-        <label>Panjang (P): <input type="number" id="objP" onchange="updateObjekTerpilih()"></label>
-        <label>Lebar (L): <input type="number" id="objL" onchange="updateObjekTerpilih()"></label>
-        <label>Tinggi/Tebal (T): <input type="number" id="objT" onchange="updateObjekTerpilih()"></label>
+      <!-- TOOLTIP KOORDINAT MELAYANG (HOVER HUD) -->
+      <div id="coordTooltip" style="
+        position: absolute;
+        display: none;
+        pointer-events: none;
+        background: rgba(13, 13, 18, 0.9);
+        border: 1px solid #00ffcc;
+        box-shadow: 0 0 10px rgba(0,255,204,0.4);
+        color: #ffffff;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        z-index: 1000;
+        transform: translate(-50%, -120%);
+        line-height: 1.4;
+      ">
+        <span id="coordText" style="color: #00ffcc;">X: 0 | Y: 0 | Z: 0</span>
       </div>
 
-      <div id="groupSilinderDim" class="input-group" style="display: none;">
-        <label>Diameter (D): <input type="number" id="objDiameter" onchange="updateObjekTerpilih()"></label>
-        <label>Tinggi (P): <input type="number" id="objTinggiSilinder" onchange="updateObjekTerpilih()"></label>
+      <!-- Tooltip Indicator Rotasi Gizmo -->
+      <div id="rotationTooltip" style="
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: none;
+        background: rgba(0,0,0,0.8);
+        color: #00ffcc;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-family: monospace;
+        font-size: 13px;
+        z-index: 999;
+      ">
+        Rotasi: X: 0° | Y: 0° | Z: 0°
       </div>
 
-      <label class="slider-label">Transparansi: 
-        <input type="range" id="objOpacity" min="0.1" max="1.0" step="0.05" oninput="updateObjekTerpilih()">
-        <span id="opacityVal">100%</span>
-      </label>
+      <!-- Panel Kontrol Overlay Alat -->
+      <div id="toolOverlayPanel" style="display: none;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+          <span id="toolOverlayIcon" style="font-size: 20px;">🪛</span>
+          <strong id="toolOverlayName">Kontrol Alat</strong>
+        </div>
+        
+        <div id="rowToolDiameter" class="control-row">
+          <label id="lblToolDiameter">Diameter (d):</label>
+          <input type="number" id="toolDiameter" value="2" min="0.5" max="10" step="0.5" onchange="updateAlatTransform()">
+        </div>
+        
+        <div class="control-row">
+          <label>Kedalaman (t):</label>
+          <input type="number" id="toolDepth" value="4" min="1" max="20" step="0.5" onchange="updateAlatTransform()">
+        </div>
 
-      <div class="rot-inputs">
-        <label>Rotasi X: <input type="number" id="objRotX" onchange="updateObjekRotasiManual()"></label>
-        <label>Y: <input type="number" id="objRotY" onchange="updateObjekRotasiManual()"></label>
-        <label>Z: <input type="number" id="objRotZ" onchange="updateObjekRotasiManual()"></label>
+        <button class="btn-execute" onclick="eksekusiPemotongan()">⚡ Eksekusi Potong</button>
+      </div>
+
+      <!-- Instruction Box -->
+      <div id="hintBox" style="
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(13, 13, 18, 0.85);
+        border-left: 4px solid #00ffcc;
+        color: #ddd;
+        padding: 10px 15px;
+        border-radius: 4px;
+        font-size: 13px;
+        max-width: 320px;
+        z-index: 900;
+      ">
+        <span id="hintBoxText">💡 Pilih benda kerja untuk mengedit ukuran, atau pilih Alat Pemahat di atas.</span>
       </div>
     </div>
 
-    <!-- Modus Gizmo -->
-    <div class="gizmo-controls">
-      <button id="btnToggleTranslate" class="active" onclick="setGizmoActiveMode('translate')">Move</button>
-      <button id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">Rotate</button>
-      <button id="btnToggleOff" onclick="setGizmoActiveMode('off')">Off</button>
-      <button class="btn-danger" onclick="bersihkanAreaKerja()">Kosongkan</button>
+    <!-- Panel Samping Kiri (Sidebar Controls) -->
+    <div id="sidebar">
+      <h2>🛠️ Woodworking CAD</h2>
+      
+      <!-- Navigasi Fase -->
+      <div class="fase-selector">
+        <button id="fasePahat" class="active" onclick="setFase('pahat')">1. Pemahatan</button>
+        <button id="faseRakit" onclick="setFase('rakit')">2. Perakitan</button>
+        <button id="faseUji" onclick="setFase('uji')">3. Pengujian</button>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Pilihan Alat Pemahat -->
+      <h3>Alat Kerja</h3>
+      <div class="tool-buttons">
+        <button id="item-pahat" onclick="toggleAlat('pahat')">🪛 Pahat</button>
+        <button id="item-bor" onclick="toggleAlat('bor')">🔘 Bor</button>
+        <button id="item-gergaji" onclick="toggleAlat('gergaji')">🪚 Gergaji</button>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Gizmo Controls -->
+      <h3>Mode Transformasi</h3>
+      <div class="gizmo-buttons">
+        <button id="btnToggleTranslate" class="active" onclick="setGizmoActiveMode('translate')">📍 Geser</button>
+        <button id="btnToggleRotate" onclick="setGizmoActiveMode('rotate')">🔄 Putar</button>
+        <button id="btnToggleOff" onclick="setGizmoActiveMode('off')">🚫 Matikan</button>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Manajemen Benda Kerja -->
+      <h3>Benda Kerja</h3>
+      <div class="type-selector">
+        <button id="type-balok" class="active" onclick="setJenisBahanBaru('balok')">🪵 Balok</button>
+        <button id="type-silinder" onclick="setJenisBahanBaru('silinder')">🥢 Silinder</button>
+      </div>
+      <button class="btn-add" onclick="tambahBendaKerja()">+ Tambah Bahan Baru</button>
+
+      <div id="objectList" class="object-list"></div>
+
+      <!-- Kontrol Detail Benda Kerja Terpilih -->
+      <div id="selectedObjectControls" style="display: none;">
+        <hr class="divider">
+        <h3>Dimensi Bahan Terpilih</h3>
+        
+        <div id="groupBalokDim">
+          <div class="control-row">
+            <label>Panjang (P):</label>
+            <input type="number" id="objP" value="10" min="1" onchange="updateObjekTerpilih()">
+          </div>
+          <div class="control-row">
+            <label>Lebar (L):</label>
+            <input type="number" id="objL" value="10" min="1" onchange="updateObjekTerpilih()">
+          </div>
+          <div class="control-row">
+            <label>Tinggi (T):</label>
+            <input type="number" id="objT" value="30" min="1" onchange="updateObjekTerpilih()">
+          </div>
+        </div>
+
+        <div id="groupSilinderDim" style="display: none;">
+          <div class="control-row">
+            <label>Diameter (D):</label>
+            <input type="number" id="objDiameter" value="6" min="1" onchange="updateObjekTerpilih()">
+          </div>
+          <div class="control-row">
+            <label>Panjang (P):</label>
+            <input type="number" id="objTinggiSilinder" value="25" min="1" onchange="updateObjekTerpilih()">
+          </div>
+        </div>
+
+        <div class="control-row">
+          <label>Transparansi:</label>
+          <input type="range" id="objOpacity" min="0.2" max="1" step="0.05" value="1" oninput="updateObjekTerpilih()">
+          <span id="opacityVal">100%</span>
+        </div>
+
+        <h4>Rotasi Manual (Derajat)</h4>
+        <div class="control-row">
+          <label>Rotasi X:</label>
+          <input type="number" id="objRotX" value="0" step="5" onchange="updateObjekRotasiManual()">
+        </div>
+        <div class="control-row">
+          <label>Rotasi Y:</label>
+          <input type="number" id="objRotY" value="0" step="5" onchange="updateObjekRotasiManual()">
+        </div>
+        <div class="control-row">
+          <label>Rotasi Z:</label>
+          <input type="number" id="objRotZ" value="0" step="5" onchange="updateObjekRotasiManual()">
+        </div>
+      </div>
+
+      <hr class="divider">
+      <button class="btn-clear" onclick="bersihkanAreaKerja()">🗑️ Bersihkan Area Kerja</button>
     </div>
   </div>
-
-  <!-- Overlay Panel Alat -->
-  <div id="toolOverlayPanel" style="display: none;">
-    <h4><span id="toolOverlayIcon">🪛</span> <span id="toolOverlayName">Kontrol Alat</span></h4>
-    
-    <div id="rowToolDiameter" class="tool-row">
-      <label id="lblToolDiameter">Diameter Alat:</label>
-      <input type="number" id="toolDiameter" value="2" min="0.5" step="0.5" onchange="updateAlatTransform()">
-    </div>
-
-    <div class="tool-row">
-      <label>Kedalaman Potong:</label>
-      <input type="number" id="toolDepth" value="6" min="1" step="0.5" onchange="updateAlatTransform()">
-    </div>
-
-    <button class="btn-execute" onclick="eksekusiPemotongan()">Eksekusi Pemotongan</button>
-    
-    <div id="hintBoxText">💡 Klik permukaan kayu untuk menempatkan alat.</div>
-  </div>
-
-  <!-- MAIN APP SCRIPT -->
-  <script src="js/app.js"></script>
 </body>
 </html>
