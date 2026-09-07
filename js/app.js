@@ -384,7 +384,7 @@ function toggleAlat(alat) {
     refreshGizmoTarget();
   } else {
     toolPanel.style.display = 'none';
-    hintText.innerHTML = "💡 Pilih benda kerja untuk mengedit ukuran, atau pilih Alat Pemahat di atas.";
+    hintText.innerHTML = "💡 Pilih benda kerja untuk mengedit ukuran dan warna, atau pilih Alat Pemahat di atas.";
     if (toolGroup) { scene.remove(toolGroup); toolGroup = null; }
     refreshGizmoTarget();
   }
@@ -708,17 +708,25 @@ function rebuildOverlays(item) {
   }
 }
 
-/* --- MANAJEMEN BENDA KERJA (POSISI AWAL SELALU DI (0,0,0)) --- */
+/* --- MANAJEMEN BENDA KERJA --- */
 function setJenisBahanBaru(jenis) {
   jenisBahanBaru = jenis;
   document.getElementById('type-balok').classList.toggle('active', jenis === 'balok');
   document.getElementById('type-silinder').classList.toggle('active', jenis === 'silinder');
 }
 
+function setWarnaPreset(colorHex) {
+  document.getElementById('objColor').value = colorHex;
+  updateObjekTerpilih();
+}
+
 function tambahBendaKerja() {
   const index = bendaKerjaList.length + 1;
   const isBalok = jenisBahanBaru === 'balok';
   
+  // Pasak (Silinder) otomatis diberi warna kontras Cokelat Tua (#4a2f13)
+  const defaultColor = isBalok ? '#c28e0e' : '#4a2f13';
+
   const objData = {
     id: Date.now(),
     nama: isBalok ? `Kayu Balok #${index}` : `Pasak Silinder #${index}`,
@@ -726,6 +734,7 @@ function tambahBendaKerja() {
     p: isBalok ? 10 : 25,
     l: 10,
     t: isBalok ? 30 : 6,
+    color: defaultColor,
     opacity: 1.0,
     group: new THREE.Group(),
     voxelsGroup: null,
@@ -733,8 +742,6 @@ function tambahBendaKerja() {
   };
 
   objData.group.isBendaGroup = true;
-  
-  // PERBAIKAN 2: BENDA KERJA PERTAMA/BARU SELALU DIPOSISIKAN TEPAT DI TITIK INISIAL (0,0,0)
   objData.group.position.set(0, 0, 0);
 
   scene.add(objData.group);
@@ -784,6 +791,7 @@ function pilihBendaKerja(index) {
       document.getElementById('objTinggiSilinder').value = item.p;
     }
 
+    document.getElementById('objColor').value = item.color;
     document.getElementById('objOpacity').value = item.opacity;
     document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
 
@@ -814,7 +822,7 @@ function renderObjectListUI() {
     };
 
     card.innerHTML = `
-      <span>${item.jenis === 'balok' ? '🪵' : '🥢'} ${item.nama}</span>
+      <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${item.color}; margin-right:6px;"></span>${item.jenis === 'balok' ? '🪵' : '🥢'} ${item.nama}</span>
       <button class="btn-del" onclick="hapusBendaKerja(${idx}, event)">✕</button>
     `;
     container.appendChild(card);
@@ -834,13 +842,15 @@ function updateObjekTerpilih() {
     item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objTinggiSilinder').value) || 25));
   }
 
+  item.color = document.getElementById('objColor').value;
   item.opacity = parseFloat(document.getElementById('objOpacity').value);
   document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
 
   updateObjekMesh(item);
+  renderObjectListUI();
 }
 
-/* --- GENERATOR VOXEL DENGAN SUDAH BERDIRI TEPAT DI TITIK INISIAL (0,0,0) --- */
+/* --- GENERATOR VOXEL DENGAN DUKUNGAN WARNA & KETERLIHATAN TRANSPARAN --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -852,8 +862,10 @@ function updateObjekMesh(item) {
 
   const voxelSize = 0.4;
   const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
+  
+  // Material Fleksibel Mengikuti Pilihan Warna & Transparansi
   const woodMat = new THREE.MeshStandardMaterial({
-    color: 0xc28e0e,
+    color: new THREE.Color(item.color),
     roughness: 0.6,
     metalness: 0.1,
     transparent: item.opacity < 1.0,
@@ -861,7 +873,6 @@ function updateObjekMesh(item) {
   });
 
   if (item.jenis === 'balok') {
-    // Sudut kiri-bawah-depan tepat di (0,0,0)
     for (let x = 0; x < item.p; x += voxelSize) {
       for (let y = 0; y < item.t; y += voxelSize) {
         for (let z = 0; z < item.l; z += voxelSize) {
