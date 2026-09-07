@@ -15,6 +15,9 @@ let mouse = new THREE.Vector2();
 let currentHitPoint = new THREE.Vector3();
 let currentHitNormal = new THREE.Vector3(0, 1, 0);
 
+// Marker Visual Titik Sorot (Dot Neon)
+let hoverMarker = null;
+
 // Partikel Tahi Kayu
 let particleSystems = [];
 let isCuttingAnimation = false;
@@ -30,7 +33,6 @@ function initThreeJS() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0d0d12);
 
-  // Kamera diatur melihat oktan positif dari sudut pandang depan-atas-samping
   camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
   camera.position.set(45, 45, 65);
 
@@ -40,7 +42,7 @@ function initThreeJS() {
   container.appendChild(renderer.domElement);
 
   controls = new THREE.OrbitControls(camera, renderer.domElement);
-  controls.target.set(20, 15, 20); // Fokus awal ke tengah area positif
+  controls.target.set(20, 15, 20);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
 
@@ -71,6 +73,14 @@ function initThreeJS() {
   // MENGATUR DINDING GRID KOORDINAT DI OKTAN POSITIF (XY, XZ, YZ)
   setupCadGridWalls();
 
+  // Buat Marker Titik Sorot (Dot Neon Merah/Hijau)
+  const dotGeo = new THREE.SphereGeometry(0.3, 16, 16);
+  const dotMat = new THREE.MeshBasicMaterial({ color: 0xff0055, wireframe: true });
+  hoverMarker = new THREE.Mesh(dotGeo, dotMat);
+  hoverMarker.visible = false;
+  scene.add(hoverMarker);
+
+  container.addEventListener('mousemove', onViewportHover);
   container.addEventListener('click', onViewportClick);
   window.addEventListener('resize', onWindowResize);
 
@@ -81,44 +91,36 @@ function initThreeJS() {
 /* --- DINDING GRID KOORDINAT DENGAN PENANDA SKALA (CAD RULER) --- */
 function setupCadGridWalls() {
   const size = 60;
-  const divisions = 60; // 1 Kotak Grid = 1 Unit Ukuran
+  const divisions = 60;
 
-  // 1. Grid Lantai XZ (Y = 0)
   const gridXZ = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x333344);
   gridXZ.position.set(size / 2, 0, size / 2);
   scene.add(gridXZ);
 
-  // 2. Grid Dinding Belakang XY (Z = 0)
   const gridXY = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x222233);
   gridXY.rotation.x = Math.PI / 2;
   gridXY.position.set(size / 2, size / 2, 0);
   scene.add(gridXY);
 
-  // 3. Grid Dinding Samping YZ (X = 0)
   const gridYZ = new THREE.GridHelper(size, divisions, 0x00ffcc, 0x222233);
   gridYZ.rotation.z = Math.PI / 2;
   gridYZ.position.set(0, size / 2, size / 2);
   scene.add(gridYZ);
 
-  // 4. SUMBU TIGA DIMENSI POSITIF TERPANJANG DENGAN PENGGARIS (RULER TICKS)
   const axesGroup = new THREE.Group();
 
-  // Sumbu X (Merah)
   const lineXMat = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 3 });
   const lineXGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(size,0,0)]);
   axesGroup.add(new THREE.Line(lineXGeo, lineXMat));
 
-  // Sumbu Y (Hijau)
   const lineYMat = new THREE.LineBasicMaterial({ color: 0x33ff33, linewidth: 3 });
   const lineYGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,size,0)]);
   axesGroup.add(new THREE.Line(lineYGeo, lineYMat));
 
-  // Sumbu Z Dipanjangkan (Biru Neon)
   const lineZMat = new THREE.LineBasicMaterial({ color: 0x3388ff, linewidth: 4 });
   const lineZGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,size * 1.2)]);
   axesGroup.add(new THREE.Line(lineZGeo, lineZMat));
 
-  // Menambahkan Titik Penanda Skala Penggaris (Ruler Ticks) setiap 5 Unit di Sumbu Z
   const tickMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
   for (let z = 5; z <= size * 1.2; z += 5) {
     const tickGeo = new THREE.BufferGeometry().setFromPoints([
@@ -129,6 +131,64 @@ function setupCadGridWalls() {
   }
 
   scene.add(axesGroup);
+}
+
+/* --- DETEKSI HOVER DENGAN TOOLTIP KOORDINAT MELAYANG --- */
+function onViewportHover(event) {
+  if (transformControl.dragging || isCuttingAnimation) return;
+
+  const container = document.getElementById('viewport');
+  const rect = container.getBoundingClientRect();
+
+  mouse.x = ((event.clientX - rect.left) / container.clientWidth) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / container.clientHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  const targetMeshes = [];
+  bendaKerjaList.forEach(b => {
+    if (b.voxelsGroup) {
+      b.voxelsGroup.children.forEach(v => targetMeshes.push(v));
+    }
+  });
+
+  const intersects = raycaster.intersectObjects(targetMeshes);
+  const coordTooltip = document.getElementById('coordTooltip');
+  const coordText = document.getElementById('coordText');
+
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+    let parentGroup = hit.object.parent;
+    while (parentGroup && !parentGroup.isBendaGroup) {
+      parentGroup = parentGroup.parent;
+    }
+
+    if (parentGroup) {
+      // Hitung Koordinat Lokal terhadap Kayu
+      const localPos = parentGroup.worldToLocal(hit.point.clone());
+
+      const locX = localPos.x.toFixed(1);
+      const locY = localPos.y.toFixed(1);
+      const locZ = localPos.z.toFixed(1);
+
+      // Tampilkan Marker Dot Neon di Titik Sorot
+      hoverMarker.position.copy(hit.point);
+      hoverMarker.visible = true;
+
+      // Update Posisi HTML Tooltip di Layar
+      const screenX = event.clientX - rect.left;
+      const screenY = event.clientY - rect.top;
+
+      coordTooltip.style.left = `${screenX}px`;
+      coordTooltip.style.top = `${screenY}px`;
+      coordTooltip.style.display = 'block';
+
+      coordText.innerHTML = `📍 Koordinat Kayu<br>X: <strong>${locX}</strong> | Y: <strong>${locY}</strong> | Z: <strong>${locZ}</strong>`;
+    }
+  } else {
+    hoverMarker.visible = false;
+    coordTooltip.style.display = 'none';
+  }
 }
 
 /* --- ANIMASI PERCIKAN TAHI KAYU --- */
@@ -312,11 +372,11 @@ function toggleAlat(alat) {
     if (activeAlat === 'pahat') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Lebar Pahat (d):";
-      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Penampang potong persegi <strong>(d × d)</strong> presisi.";
+      hintText.innerHTML = "🪛 <strong>Pahat Pipih:</strong> Sorot permukaan kayu untuk melihat titik koordinat sebelum menempelkan pahat.";
     } else if (activeAlat === 'bor') {
       rowDiameter.style.display = 'flex';
       lblDiameter.innerText = "Diameter Bor (D):";
-      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Penampang potong melingkar murni (Diameter D).";
+      hintText.innerHTML = "🔘 <strong>Bor Silinder:</strong> Sorot permukaan kayu untuk melihat titik koordinat sebelum mengebor.";
     } else if (activeAlat === 'gergaji') {
       rowDiameter.style.display = 'none';
       hintText.innerHTML = "🪚 <strong>Gergaji Potong:</strong> Klik permukaan kayu untuk menempatkan bilah gergaji.";
@@ -333,7 +393,7 @@ function toggleAlat(alat) {
   }
 }
 
-/* --- MODEL ALAT 3D (PIVOT UJUNG MATA POTONG) --- */
+/* --- MODEL ALAT 3D --- */
 function create3DTool(positionPoint = null, normalVector = null) {
   if (toolGroup) scene.remove(toolGroup);
   if (!activeAlat) return;
@@ -594,7 +654,6 @@ function prosesPemotonganVoxelFisik(targetObj) {
     v.material.dispose();
   });
 
-  // Silinder Dinding Dalam Halus khusus Bor
   if (activeAlat === 'bor') {
     const holeGeo = new THREE.CylinderGeometry(radiusBor, radiusBor, valDepthInput, 32, 1, true);
     holeGeo.translate(0, -valDepthInput / 2, 0);
@@ -622,7 +681,7 @@ function prosesPemotonganVoxelFisik(targetObj) {
   }
 
   targetObj.hasBeenCut = true;
-  rebuildOverlays(item);
+  rebuildOverlays(targetObj);
 }
 
 /* --- REBUILD OVERLAY BOUNDING RULER --- */
@@ -636,7 +695,6 @@ function rebuildOverlays(item) {
   });
   toRemove.forEach(c => item.group.remove(c));
 
-  // Bounding Box Neon & Skala Ukuran
   if (selectedObjIndex >= 0 && bendaKerjaList[selectedObjIndex] === item) {
     let sizeX = item.jenis === 'balok' ? item.p : item.t;
     let sizeY = item.jenis === 'balok' ? item.t : item.p;
@@ -653,7 +711,7 @@ function rebuildOverlays(item) {
   }
 }
 
-/* --- MANAJEMEN BENDA KERJA (SISTEM KOORDINAT POSITIF) --- */
+/* --- MANAJEMEN BENDA KERJA --- */
 function setJenisBahanBaru(jenis) {
   jenisBahanBaru = jenis;
   document.getElementById('type-balok').classList.toggle('active', jenis === 'balok');
@@ -678,7 +736,6 @@ function tambahBendaKerja() {
   };
 
   objData.group.isBendaGroup = true;
-  // Menempatkan Benda Kerja di Titik OKTAN POSITIF (X >= 5, Y = 0, Z >= 5)
   const offsetX = 5 + (bendaKerjaList.length) * 15;
   objData.group.position.set(offsetX, 0, 5);
 
@@ -785,7 +842,7 @@ function updateObjekTerpilih() {
   updateObjekMesh(item);
 }
 
-/* --- GENERATOR VOXEL DENGAN LANDASAN KOORDINAT POSITIF (X>=0, Y>=0, Z>=0) --- */
+/* --- GENERATOR VOXEL KOORDINAT POSITIF --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
