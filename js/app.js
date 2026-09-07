@@ -720,11 +720,24 @@ function setWarnaPreset(colorHex) {
   updateObjekTerpilih();
 }
 
+function updateColorAndOpacityDirectly(item) {
+  if (!item || !item.voxelsGroup) return;
+
+  const isTransparent = item.opacity < 1.0;
+  const threeColor = new THREE.Color(item.color);
+
+  item.voxelsGroup.children.forEach(vMesh => {
+    vMesh.material.color.copy(threeColor);
+    vMesh.material.opacity = item.opacity;
+    vMesh.material.transparent = isTransparent;
+    vMesh.material.needsUpdate = true;
+  });
+}
+
 function tambahBendaKerja() {
   const index = bendaKerjaList.length + 1;
   const isBalok = jenisBahanBaru === 'balok';
   
-  // Pasak (Silinder) otomatis diberi warna kontras Cokelat Tua (#4a2f13)
   const defaultColor = isBalok ? '#c28e0e' : '#4a2f13';
 
   const objData = {
@@ -822,7 +835,7 @@ function renderObjectListUI() {
     };
 
     card.innerHTML = `
-      <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${item.color}; margin-right:6px;"></span>${item.jenis === 'balok' ? '🪵' : '🥢'} ${item.nama}</span>
+      <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${item.color}; margin-right:6px; border:1px solid #fff;"></span>${item.jenis === 'balok' ? '🪵' : '🥢'} ${item.nama}</span>
       <button class="btn-del" onclick="hapusBendaKerja(${idx}, event)">✕</button>
     `;
     container.appendChild(card);
@@ -833,12 +846,16 @@ function updateObjekTerpilih() {
   if (selectedObjIndex < 0) return;
   const item = bendaKerjaList[selectedObjIndex];
 
+  const pLama = item.p;
+  const lLama = item.l;
+  const tLama = item.t;
+
   if (item.jenis === 'balok') {
     item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objP').value) || 10));
     item.l = Math.max(1, Math.round(parseFloat(document.getElementById('objL').value) || 10));
     item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objT').value) || 30));
   } else {
-    item.t = Math.max(1, Math.round(parseFloat(document.getElementById('objDiameter').value) || 6));
+    item.t = Math.max(0.5, parseFloat(document.getElementById('objDiameter').value) || 6);
     item.p = Math.max(1, Math.round(parseFloat(document.getElementById('objTinggiSilinder').value) || 25));
   }
 
@@ -846,11 +863,18 @@ function updateObjekTerpilih() {
   item.opacity = parseFloat(document.getElementById('objOpacity').value);
   document.getElementById('opacityVal').innerText = `${Math.round(item.opacity * 100)}%`;
 
-  updateObjekMesh(item);
+  const dimensiBerubah = (pLama !== item.p || lLama !== item.l || tLama !== item.t);
+
+  if (dimensiBerubah || !item.voxelsGroup || item.hasBeenCut) {
+    updateObjekMesh(item);
+  } else {
+    updateColorAndOpacityDirectly(item);
+  }
+
   renderObjectListUI();
 }
 
-/* --- GENERATOR VOXEL DENGAN DUKUNGAN WARNA & KETERLIHATAN TRANSPARAN --- */
+/* --- PERBAIKAN GENERATOR SILINDER VOXEL KELINGKARAN MURNI --- */
 function updateObjekMesh(item) {
   const group = item.group;
   while(group.children.length > 0){ 
@@ -860,10 +884,9 @@ function updateObjekMesh(item) {
   item.voxelsGroup = new THREE.Group();
   group.add(item.voxelsGroup);
 
-  const voxelSize = 0.4;
+  const voxelSize = 0.3; // Densitas voxel tinggi agar lingkaran silinder halus
   const boxGeo = new THREE.BoxGeometry(voxelSize, voxelSize, voxelSize);
   
-  // Material Fleksibel Mengikuti Pilihan Warna & Transparansi
   const woodMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(item.color),
     roughness: 0.6,
@@ -882,15 +905,25 @@ function updateObjekMesh(item) {
         }
       }
     }
-  } else { // Silinder
-    const radius = item.t / 2;
+  } else { 
+    // SILINDER MELINGKAR MURNI PRESISI
+    const radius = item.t / 2; // Radius silinder = Diameter / 2
+    const centerX = radius;    // Titik pusat X silinder
+    const centerZ = radius;    // Titik pusat Z silinder
 
-    for (let x = -radius; x < radius; x += voxelSize) {
-      for (let z = -radius; z < radius; z += voxelSize) {
-        if (Math.sqrt(x*x + z*z) <= radius) {
+    for (let x = 0; x < item.t; x += voxelSize) {
+      for (let z = 0; z < item.t; z += voxelSize) {
+        
+        // Hitung jarak titik pusat voxel ke pusat silinder
+        const distX = (x + voxelSize / 2) - centerX;
+        const distZ = (z + voxelSize / 2) - centerZ;
+        const distRadial = Math.sqrt(distX * distX + distZ * distZ);
+
+        // Hanya buat voxel jika posisi berada di dalam radius melingkar
+        if (distRadial <= radius) {
           for (let y = 0; y < item.p; y += voxelSize) {
             const vMesh = new THREE.Mesh(boxGeo, woodMat);
-            vMesh.position.set(x + radius + voxelSize/2, y + voxelSize/2, z + radius + voxelSize/2);
+            vMesh.position.set(x + voxelSize / 2, y + voxelSize / 2, z + voxelSize / 2);
             item.voxelsGroup.add(vMesh);
           }
         }
